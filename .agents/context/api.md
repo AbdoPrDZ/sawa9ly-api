@@ -3,6 +3,44 @@
 FastAPI, assembled in `src/server.py`. Run it with `python main.py serve` or
 `uvicorn src.server:app`. Interactive docs are served at `/docs`.
 
+## The `/v1` prefix
+
+The prefix covers the **machine-facing** routes only — the ones a caller reaches
+with an API key. They nest under one versioned parent router in `create_app`, so
+`API_PREFIX` is written down exactly once and no controller carries it. A `/v2`
+is a second parent beside the first, not an edit to the block, so `/v1` clients
+keep working.
+
+`API_PREFIX` is the version of the **wire format**, and is deliberately not
+derived from `VERSION` in `src/version.py`. That one is the application's
+version; they move independently.
+
+Three groups stay at the root, unversioned, and the reason differs in each case:
+
+- **`/auth` and `/admin`** — the dashboard's own API. `public/` is the only
+  caller, so there is no second consumer to keep compatible. They are mounted
+  on the app directly rather than through the versioned parent, which is why
+  their paths read as `/auth/login` and `/admin/users`.
+- **`/health`** — what a load balancer or container health check points at, and
+  those are configured against a fixed path. Versioning it breaks them silently.
+- **`/me`** — the meta route that echoes back who a key belongs to.
+
+The split follows the credential, not the resource: `require_admin` and
+`get_token_user` mean dashboard-only, `get_current_user` means machine-facing,
+and `get_any_user` (trackers) counts as machine-facing because it also accepts an
+API key.
+
+Adding a machine route means: pick the controller, register the path relative to
+the resource, and **do not** add `/v1` — the parent applies it. Adding a
+dashboard route means the same, and it needs no prefix at all.
+
+`python main.py router` prints the whole table, one row per method, read from the
+same OpenAPI schema `/docs` serves — so it cannot disagree with the
+documentation. It reports method, path, tag and summary, and deliberately not
+authentication: the routes authenticate through `Depends`, which leaves no
+security scheme in the schema, so deriving "needs an API key" would mean a second
+source that could contradict the dependency.
+
 ## Authentication
 
 Every route except `/health` requires an API key, presented as `X-API-Key` or
@@ -47,9 +85,10 @@ schema.
 ## Resources
 
 Grouped by the page they drive, which is also how the controllers are split:
-products, cart, checkout, catalogue, clients, orders, plus `/health` and `/me`.
-Orders are the deepest: an order has lines, and a line is addressed by product
-id rather than by line id, because a product appears at most once in an order.
+products, cart, checkout, catalogue, clients, orders, trackers, plus the
+unversioned `/health` and `/me`. Orders are the deepest: an order has lines, and
+a line is addressed by product id rather than by line id, because a product
+appears at most once in an order.
 
 Self-service lives on `/auth/me/*` and is available to **any** signed-in user,
 whatever their role — changing your own password or your own sawa9ly credentials

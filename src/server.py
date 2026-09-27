@@ -14,7 +14,7 @@ sends back a signed, expiring token on the /auth and /admin routes.
 import sys
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
@@ -40,6 +40,15 @@ from src.version import VERSION
 
 API_TITLE = "sawa9ly client API"
 API_VERSION = VERSION
+
+#: The HTTP contract version, in the path. Deliberately NOT derived from
+#: `VERSION`: that is the application's version, and this is the version of the
+#: wire format. They move independently — a bug fix ships as 1.3.1 with the
+#: contract still at `/v1`.
+#:
+#: Applies to the machine-facing routes only. The dashboard's `/auth` and
+#: `/admin` are unversioned, because the dashboard is their only caller.
+API_PREFIX = "/v1"
 
 # The dashboard's build output. Source lives in public/, but only dist/ is ever
 # served, so node_modules and the sources are not exposed over HTTP.
@@ -75,20 +84,41 @@ def create_app():
     ),
   )
 
-  app.include_router(ProductsController.router)
-  app.include_router(CartController.router)
-  app.include_router(CheckoutController.router)
-  app.include_router(CatalogueController.router)
-  app.include_router(ClientController.router)
-  app.include_router(OrderController.router)
-  app.include_router(AuthController.router)
-  app.include_router(TrackersController.router)
-  app.include_router(AdminUsersController.router)
-  app.include_router(AdminKeysController.router)
+  # The published contract. Every route here is reachable with a machine API
+  # key, so they share one version prefix and a future `/v2` is added beside
+  # this parent rather than in place of it.
+  versioned = APIRouter(prefix=API_PREFIX)
+
+  for controller in (
+    ProductsController,
+    CartController,
+    CheckoutController,
+    CatalogueController,
+    ClientController,
+    OrderController,
+    TrackersController,
+  ):
+    versioned.include_router(controller.router)
+
+  app.include_router(versioned)
+
+  # The dashboard's own surface, deliberately NOT versioned. `/auth` and
+  # `/admin` are reachable only with a dashboard token, and the sole caller is
+  # the dashboard in public/ — there is no second consumer to keep compatible,
+  # and versioning a private endpoint only buys a migration nobody needs. They
+  # are mounted on the app directly, so their paths read as `/auth/login` and
+  # `/admin/users` with no prefix to strip.
+  for controller in (AuthController, AdminUsersController, AdminKeysController):
+    app.include_router(controller.router)
 
   @app.get("/health", tags=["meta"])
   def health():
-    """Liveness probe. No authentication required."""
+    """Liveness probe. No authentication required.
+
+    Unversioned on purpose: this is what a load balancer, a container health
+    check or an uptime monitor points at, and those are configured against a
+    fixed path. Renaming it would break them without buying anything.
+    """
     return {"status": "ok"}
 
   @app.get("/me", tags=["meta"])

@@ -12,11 +12,11 @@ Two independent credential systems, and confusing them is the main risk here.
 
 A machine request presents an API key; that resolves a `User`; that user's stored
 sawa9ly session is then used for the site. A browser presents a password, gets a
-signed token, and uses that token on `/auth` and `/admin`. **Neither credential
-reaches the site and the site's cookie is never sent to a client.**
+ signed token, and uses that token on `/auth` and `/admin`. **Neither
+credential reaches the site and the site's cookie is never sent to a client.**
 
-`Authorization: Bearer` is overloaded: an API key on the `/cart` and `/orders`
-routes, a dashboard token on `/auth` and `/admin`. They are separate dependencies
+`Authorization: Bearer` is overloaded: an API key on the `/v1/cart` and
+`/v1/orders` routes, a dashboard token on `/auth` and `/admin`. They are separate dependencies
 with separate token formats, so nothing is accepted by both.
 
 ## API keys

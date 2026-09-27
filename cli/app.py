@@ -14,14 +14,21 @@ from cli.cron import CronCli
 from cli.order import OrderCli
 from cli.output import Output
 from cli.product import ProductCli
+from cli.router import RouterCli
 from cli.serve import ServeCli
 from cli.track import TrackCli
-from src.services import CronError, OrderError, TrackingError
+from src.services import AccountsError, CronError, OrderError, TrackingError
 from src.utils.livewire import LivewireError
 
 # Refusals the CLI reports as `error: ...` with a non-zero exit, rather than
 # treating them as a crash.
-EXPECTED_ERRORS = (LivewireError, OrderError, TrackingError, CronError)
+#
+# AccountsError is here because assembling the app is a refusal with a perfectly
+# good message: a command that reaches `create_app` — `serve`, and `router` via
+# its route table — hits the super-account guard on a checkout that has neither a
+# super nor the environment to make one, and that is a setup step to report, not
+# a crash to dump a traceback over.
+EXPECTED_ERRORS = (LivewireError, OrderError, TrackingError, CronError, AccountsError)
 
 
 class App:
@@ -35,6 +42,7 @@ class App:
     AccountCli,
     TrackCli,
     CronCli,
+    RouterCli,
     ServeCli,
   )
 
@@ -77,6 +85,7 @@ class App:
       'AccountCli': {'user', 'apikey'},
       'TrackCli': {'track'},
       'CronCli': {'cron'},
+      'RouterCli': {'router'},
       'ServeCli': {'serve'},
     }
     return command in names.get(group.__name__, set())

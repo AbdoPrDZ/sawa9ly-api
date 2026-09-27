@@ -117,7 +117,7 @@ anything is watched is a clean no-op rather than a failed login.
 
 ## API
 
-`/trackers` mirrors the CLI: list, watch, unwatch. It accepts **either** an API
+`/v1/trackers` mirrors the CLI: list, watch, unwatch. It accepts **either** an API
 key or a dashboard token, because both a machine and the browser need to manage
 the same subscriptions.
 

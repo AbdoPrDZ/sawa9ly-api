@@ -9,22 +9,15 @@ const API = 'http://127.0.0.1:8000'
 // Every API path prefix the dashboard can call, so the dev server forwards them
 // instead of answering with its own index.html.
 //
-// `/products` is deliberately absent: the API has `/products/{id}` (the scrape
-// endpoints) and the dashboard has its own `/products` page. Vite cannot serve
-// both, and the dashboard reads the catalogue through `/catalogue`, so nothing
-// needs the API's `/products` from the browser. See "Route collision" below.
-const API_PREFIXES = [
-  'admin',
-  'auth',
-  'cart',
-  'catalogue',
-  'checkout',
-  'clients',
-  'health',
-  'me',
-  'orders',
-  'trackers',
-] as const
+// `v1` covers the machine-facing contract; `auth` and `admin` are the
+// dashboard's own endpoints, which the server mounts unversioned. `health` and
+// `me` are unversioned too. Vite matches proxy keys as path prefixes, so
+// `v1` also forwards `/v1/auth/...` style paths beneath it.
+//
+// Versioning also retired the old `/products` collision described in
+// "Route collision" below: the API's scrape routes are `/v1/products/{id}` and
+// the dashboard page is `/products`, so no prefix can serve both.
+const API_PREFIXES = ['v1', 'auth', 'admin', 'health', 'me'] as const
 
 const proxy = Object.fromEntries(
   API_PREFIXES.map((prefix) => [`/${prefix}`, { target: API, changeOrigin: false }]),

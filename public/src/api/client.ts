@@ -6,6 +6,36 @@
  * dev proxy in vite.config.ts exists only to reproduce that locally.
  */
 
+/**
+ * The API contract version, matching `API_PREFIX` in `src/server.py`.
+ *
+ * Applied here rather than in each caller so the resource modules stay
+ * prefix-agnostic: a `/v2` is this one constant, not fourteen edits. Callers
+ * pass the bare resource path, e.g. `request('/auth/me')`.
+ */
+const API_PREFIX = '/v1'
+
+/**
+ * The dashboard's own endpoints, which the server mounts WITHOUT the version
+ * prefix because nothing outside `public/` calls them.
+ *
+ * These are the exception to the rule above, so the rule needs an exception
+ * list — but it is one list in one place, rather than a second decision
+ * scattered through the resource modules. `/health` and `/me` are unversioned
+ * too, but the dashboard never calls them.
+ *
+ * Keep in step with the unversioned mounts in `create_app` in `src/server.py`.
+ * The server is the authority; this is the client half of the same fact.
+ */
+const UNVERSIONED_PREFIXES = ['/auth', '/admin']
+
+/** Resolve a bare resource path to the URL to actually fetch. */
+function urlFor(path: string): string {
+  const unversioned = UNVERSIONED_PREFIXES.some((prefix) => path.startsWith(prefix))
+
+  return unversioned ? path : `${API_PREFIX}${path}`
+}
+
 const TOKEN_KEY = 'sawa9ly.dashboard.token'
 
 /** Carries the HTTP status, so callers can tell "signed out" from "not allowed". */
@@ -64,7 +94,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   if (current) headers['Authorization'] = `Bearer ${current}`
   if (init.body) headers['Content-Type'] = 'application/json'
 
-  const response = await fetch(path, { ...init, headers })
+  const response = await fetch(urlFor(path), { ...init, headers })
 
   if (response.status === 204) return undefined as T
 

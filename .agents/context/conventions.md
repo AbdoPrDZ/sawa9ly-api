@@ -27,7 +27,10 @@ deviation or "fix" it by accident.
   scheduler that understood products would be two reasons to change in one file.
 - **CLI groups** (`cli/`) each expose `register(parser, default_user)` and
   `dispatch(args)`. `App.GROUPS` lists them; `App._handles` maps a command name to
-  its owner.
+  its owner. A group that reaches `src.server` must import it **inside**
+  `dispatch`: `cli/app.py` imports every group when it builds the parser, and
+  importing `src.server` runs `create_app()`, so a module-level import would make
+  every command need a database. `cli/router.py` is the example.
 - **Request plumbing** hangs off `Dependencies`, so a controller's signature
   documents its own requirements.
 

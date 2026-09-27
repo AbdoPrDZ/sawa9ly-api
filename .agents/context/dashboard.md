@@ -68,7 +68,7 @@ Consequences worth remembering:
 ```bash
 cd public
 npm install
-npm run dev      # Vite on :5173, proxying /auth /admin /health to :8000
+npm run dev      # Vite on :5173, proxying /v1 /auth /admin /health /me to :8000
 npm run build    # writes dist/
 npm run typecheck
 ```
@@ -104,7 +104,21 @@ and for any environment-specific build variable. **Do not introduce
 `import.meta.env.VITE_API_URL` or a base URL** unless the dashboard is genuinely
 served from a different origin than the API.
 
-The dev proxy exists only to reproduce same-origin behaviour locally.
+The version prefix is applied in exactly one place, `urlFor` in
+`public/src/api/client.ts`, called from `request()`. The per-resource modules
+pass bare paths (`request('/auth/me')`) and stay prefix-agnostic, so a `/v2` is
+that one constant rather than an edit to every api module.
+
+`UNVERSIONED_PREFIXES` in the same file is the deliberate exception: the
+dashboard's own `/auth` and `/admin` are mounted unversioned on the server,
+because this app is their only caller. **The server is the authority** — the
+list in `client.ts` is the client half of the same fact, and the two must agree.
+Adding a new dashboard-only endpoint means adding it to both.
+
+The dev proxy exists only to reproduce same-origin behaviour locally. Its list
+in `vite.config.ts` is `v1`, `auth`, `admin`, `health` and `me`. Versioning also
+retired the old route collision: the API's scrape routes are `/v1/products/{id}`
+and the dashboard's own page is `/products`, so no proxy prefix can serve both.
 
 ## Pages and who sees them
 
@@ -138,7 +152,7 @@ sawa9ly.
 starts or stops tracking it. It handles the "not saved yet" case by offering the
 same fetch, because a 404 on a product page is otherwise a dead end.
 
-Both pages read the watch state from `/trackers` once and match by
+Both pages read the watch state from `/v1/trackers` once and match by
 `product_id`, rather than asking per row. `WatchButton` re-reads the server's
 answer after a failed toggle instead of keeping whatever the failed attempt
 intended — the server is the truth about what is watched.

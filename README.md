@@ -42,37 +42,70 @@ python main.py user add alice --email you@example.com --password ...
 ```
 
 Everything else is optional and documented in
-[Configuration](#configuration) — database, port, logging.
+[Configuration](#configuration) — database, port, logging. Calling the HTTP API
+is covered in [API_GUIDE.md](API_GUIDE.md).
 
 ### Installing the package (optional)
 
-The commands above run from a checkout, which is the normal way to use this. You
-can also install it, which gives you a `sawa9ly` command and lets you run
-`python -m sawa9ly <command>` from anywhere:
+The venv route above runs from a checkout, which is the normal way to use this.
+You can also install the package, which gives you a `sawa9ly` command and lets
+you run `python -m sawa9ly <command>` from any directory.
+
+There are two ways to install. Neither needs `setuptools` or `wheel` — pip
+supplies the build backend itself, in a throwaway environment that is discarded
+afterwards, so neither ends up in your runtime.
+
+**From a clone** — the normal choice if you want to read or edit the code:
 
 ```bash
-pip install setuptools wheel      # build needs these; they are not runtime deps
+git clone https://github.com/AbdoPrDZ/sawa9ly-api.git
+cd sawa9ly-api
+python -m venv .venv
+.venv\Scripts\activate              # Windows
+.venv/bin/activate                  # macOS / Linux
 pip install .
-sawa9ly user list
-python -m sawa9ly user list
 ```
 
-All three forms — `python main.py`, `python -m sawa9ly` and `sawa9ly` — are the
-same parser, so every command below works with any of them.
+**Straight from the repository**, without cloning it first:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate              # Windows
+.venv/bin/activate                  # macOS / Linux
+pip install git+https://github.com/AbdoPrDZ/sawa9ly-api.git
+```
+
+Either way you then get all three forms, which are the same parser — so every
+command in this README works with any of them:
+
+```bash
+sawa9ly user list
+python -m sawa9ly user list
+python main.py user list             # from inside a clone
+```
+
+To upgrade a git install later, add `--upgrade`. To pull a fix without
+reinstalling, use `pip install --force-reinstall` — a plain reinstall is
+caching:
+
+```bash
+pip install --upgrade --force-reinstall git+https://github.com/AbdoPrDZ/sawa9ly-api.git
+```
 
 **Know this before you rely on an install.** An installed copy resolves its paths
-from its own location inside `site-packages`, not from your project, so:
+from its own location inside `site-packages`, not from your project directory,
+so:
 
 - the database is created at `site-packages/data/sawa9ly.db` — a **separate,
   empty** database, not the one your checkout uses;
 - the dashboard is not served, because `public/dist` is not part of the
-  distribution, so `/` returns 404 and the API routes still work;
+  distribution, so `/` returns 404 while the API routes still work;
 - `serve` needs `SUPER_ADMIN_USERNAME` and `SUPER_ADMIN_PASSWORD` set, or an
   existing super in that separate database, or it refuses to start.
 
 Read-only commands against the live site work fine. Anything that should see
-your real users, keys, orders or cart wants a checkout and `python main.py`.
-Pointing the install at a specific data directory is a change to `Config` in
+your real users, keys, orders or cart wants a clone and `python main.py`.
+Pointing an install at a specific data directory is a change to `Config` in
 `src/config.py`.
 
 ### There is no default user
@@ -413,6 +446,11 @@ Set it explicitly on a server so tokens survive a database restore.
 
 ## HTTP API
 
+**See [API_GUIDE.md](API_GUIDE.md)** for the full guide: which credential each
+route wants, what every error code means, and worked workflows including placing
+an order safely. This section is the summary; `/docs` is the live schema
+reference.
+
 ```bash
 python main.py apikey create --user local --label "my app"   # prints the key once
 python main.py serve --port 8000                             # or: uvicorn src.server:app
@@ -422,38 +460,56 @@ Interactive docs are at http://127.0.0.1:8000/docs. Machine routes need an API
 key; `/auth` and `/admin` need a dashboard token instead.
 
 ```bash
-curl -H "X-API-Key: sk_..." http://127.0.0.1:8000/cart
+curl -H "X-API-Key: sk_..." http://127.0.0.1:8000/v1/cart
 ```
 
 The key identifies the user, and every request uses that user's own sawa9ly
 session and cart, so two keys never interfere.
 
+### Versioning
+
+The **machine-facing** routes sit under **`/v1`**:
+
 | Route | Description |
 | --- | --- |
-| `GET /health` | Liveness, no auth |
-| `GET /me` | The user the key belongs to |
-| `GET /products/{id}` | Scrape a product page |
-| `POST /products/{id}/cart` | Add to cart |
-| `DELETE /products/{id}/cart` | Remove from cart |
-| `GET /cart` | The cart |
-| `PUT /cart/items/{id}/quantity` | Set a quantity |
-| `PUT /cart/items/{id}/price` | Set a unit price |
-| `DELETE /cart/items/{id}` | Remove a line |
-| `POST /checkout` | Set quantities/prices, fill the form, submit |
-| `GET /catalogue`, `GET /catalogue/{id}`, `POST /catalogue/{id}` | Saved product info |
-| `GET/POST /clients`, `GET /clients/{id}` | Delivery recipients |
-| `GET/POST /orders`, `GET /orders/{id}` | Orders |
-| `POST /orders/{id}/lines` | Add a product to a draft |
-| `PUT/DELETE /orders/{id}/lines/{product}` | Edit or remove a line |
-| `POST /orders/{id}/checkout` | Submit a draft order |
+| `GET /v1/products/{id}` | Scrape a product page |
+| `POST /v1/products/{id}/cart` | Add to cart |
+| `DELETE /v1/products/{id}/cart` | Remove from cart |
+| `GET /v1/cart` | The cart |
+| `PUT /v1/cart/items/{id}/quantity` | Set a quantity |
+| `PUT /v1/cart/items/{id}/price` | Set a unit price |
+| `DELETE /v1/cart/items/{id}` | Remove a line |
+| `POST /v1/checkout` | Set quantities/prices, fill the form, submit |
+| `GET /v1/catalogue`, `GET /v1/catalogue/{id}`, `POST /v1/catalogue/{id}` | Saved product info |
+| `GET/POST /v1/clients`, `GET /v1/clients/{id}` | Delivery recipients |
+| `GET/POST /v1/orders`, `GET /v1/orders/{id}` | Orders |
+| `POST /v1/orders/{id}/lines` | Add a product to a draft |
+| `PUT/DELETE /v1/orders/{id}/lines/{product}` | Edit or remove a line |
+| `POST /v1/orders/{id}/checkout` | Submit a draft order |
+| `GET/POST /v1/trackers`, `DELETE /v1/trackers` | Watched products for change tracking |
 
-The admin routes are separate, and need `Authorization: Bearer <token>` from
-`POST /auth/login` with an admin's username and password:
+The prefix is the version of the **wire format**, not of the application, and the
+two move independently — a bug fix can ship as 1.3.1 while the contract is still
+`/v1`. A future `/v2` is added alongside `/v1`, never in place of it.
+
+**Three groups are deliberately unversioned**, because nothing outside this
+project consumes them:
+
+| Route | Description | Why no version |
+| --- | --- | --- |
+| `GET /health` | Liveness, no auth | A load balancer or container health check is configured against a fixed path; versioning it breaks those silently |
+| `GET /me` | The user the key belongs to | Meta route, not part of the resource contract |
+| `/auth/*`, `/admin/*` | The dashboard's own API | The dashboard in `public/` is the only caller, so there is no second consumer to keep compatible |
+
+The admin routes need `Authorization: Bearer <token>` from `POST /auth/login`
+with an admin's username and password:
 
 | Route | Description |
 | --- | --- |
 | `POST /auth/login` | Exchange username + password for a token (12h) |
 | `GET /auth/me` | The signed-in user |
+| `GET/PATCH /auth/me/profile` | Your own profile, any role |
+| `POST /auth/me/sawa9ly-login` | Refresh your sawa9ly session |
 | `GET/POST /admin/users` | List or create users |
 | `PATCH/DELETE /admin/users/{id}` | Edit or delete a user |
 | `GET /admin/api-keys` | Every key, every user |
@@ -479,8 +535,17 @@ Then open http://127.0.0.1:8000/ and sign in with a username and dashboard
 password.
 
 There is no Node at runtime: the build is static files, so the only process is
-the API. `npm run dev` runs Vite on port 5173 and proxies `/auth` and `/admin`
-to port 8000 for front-end work.
+the API. `npm run dev` runs Vite on port 5173 and proxies `/v1`, `/auth` and
+`/admin` (plus the unversioned `/health` and `/me`) to port 8000 for front-end
+work.
+
+**Restart both processes after changing routes or the proxy config.** Neither
+picks those up on its own: routes are registered when `create_app()` runs at
+import, and `vite.config.ts` is read once at startup. A stale `serve` or a stale
+dev server answers with a 404, a 405, or the dashboard's own HTML — which reads
+like a routing bug in the code you just changed. `API_RELOAD=true` restarts the
+API on a code change, but Vite still needs stopping and starting by hand for a
+config edit.
 
 Sign in before the dashboard does anything, and note that a stored token is
 re-checked against the server on every load — a token in the browser proves
@@ -605,7 +670,7 @@ Two behaviours worth knowing:
 - **Only one pass runs at a time**, via a lock file in `data/`. A lock left by a
   hard kill is taken over after 15 minutes.
 
-`/trackers` mirrors the CLI over HTTP and accepts either an API key or a
+`/v1/trackers` mirrors the CLI over HTTP and accepts either an API key or a
 dashboard token. There is deliberately no route that triggers a pass — one web
 request fanning out into hundreds of requests to the site is the fastest way to
 get blocked.
