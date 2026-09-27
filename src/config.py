@@ -1,0 +1,250 @@
+"""Every environment variable this project reads, in one place.
+
+Configuration is scattered by nature: a database URL in one module, a port in
+another, a credential in a third. It is gathered here so there is a single file
+to read to learn what can be set, a single place to add a variable, and no
+module that reaches into `os.environ` on its own.
+
+The rules this file follows:
+
+- Nothing here is read at import time except the names. Values are read through
+  methods, so a test or a tool can change the environment and re-read.
+- A variable is documented on the attribute that reads it.
+- Defaults are chosen so that `python main.py` works with no `.env` at all.
+"""
+
+import os
+from pathlib import Path
+
+import dotenv
+
+dotenv.load_dotenv()
+
+
+class Config:
+  """The project's environment, grouped by what it configures."""
+
+  PROJECT_ROOT = Path(__file__).resolve().parents[1]
+  DATA_DIR = PROJECT_ROOT / "data"
+
+  # There is deliberately no default-user setting. A command acts for the user
+  # it is given, and the caller must say which: guessing an account means
+  # operating on somebody's cart without anybody asking for it.
+
+  # --- database -------------------------------------------------------
+
+  DATABASE_URL_VAR = "DATABASE_URL"
+  """A full URL. Wins over everything below, for a connection string you do
+    not want to assemble from parts."""
+
+  SQLITE_FILE_VAR = "SQLITE_FILE"
+  """Where the SQLite file lives. Default: `data/sawa9ly.db`."""
+
+  DB_DRIVER_VAR = "DB_DRIVER"
+  """`sqlite` (default), `postgresql` or `mysql`. Only used when `DB_NAME` is
+    set, since SQLite is a file rather than a host."""
+
+  DB_HOST_VAR = "DB_HOST"
+  DB_PORT_VAR = "DB_PORT"
+  DB_NAME_VAR = "DB_NAME"
+  DB_USER_VAR = "DB_USER"
+  DB_PASSWORD_VAR = "DB_PASSWORD"
+
+  #: Default port per driver, so `DB_HOST` + `DB_NAME` is enough for a server.
+  DRIVER_PORTS = {"postgresql": 5432, "mysql": 3306, "sqlite": None}
+
+  @classmethod
+  def database_url(cls):
+    """The SQLAlchemy URL, from `DATABASE_URL`, from parts, or SQLite.
+
+    Falling back to a local SQLite file is what lets the project run with no
+    configuration at all.
+    """
+    url = os.getenv(cls.DATABASE_URL_VAR)
+
+    if url:
+      return url
+
+    name = os.getenv(cls.DB_NAME_VAR)
+
+    if name:
+      return cls._server_database_url(name)
+
+    return cls.sqlite_url()
+
+  @classmethod
+  def sqlite_url(cls):
+    """The default file database, in `data/`.
+
+    The directory is created here rather than at import time, so importing
+    `Config` never has the side effect of touching the filesystem.
+    """
+    path = Path(os.getenv(cls.SQLITE_FILE_VAR) or (cls.DATA_DIR / "sawa9ly.db"))
+
+    if not path.is_absolute():
+      path = cls.PROJECT_ROOT / path
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    return f"sqlite:///{path.as_posix()}"
+
+  @classmethod
+  def _server_database_url(cls, name):
+    """Assemble a URL from the discrete DB_* variables."""
+    driver = (os.getenv(cls.DB_DRIVER_VAR) or "postgresql").lower()
+    host = os.getenv(cls.DB_HOST_VAR) or "localhost"
+    port = os.getenv(cls.DB_PORT_VAR) or cls.DRIVER_PORTS.get(driver)
+    user = os.getenv(cls.DB_USER_VAR)
+    password = os.getenv(cls.DB_PASSWORD_VAR)
+
+    if driver == "sqlite":
+      return f"sqlite:///{name}"
+
+    # url-encode the credentials: a password with an `@` or a `/` in it would
+    # otherwise produce a URL that parses into the wrong place.
+    from urllib.parse import quote_plus
+
+    scheme = "postgresql" if driver == "postgresql" else "mysql"
+    credentials = f"{quote_plus(user)}:{quote_plus(password)}@" if user else ""
+    location = f"{host}:{port}" if port else host
+
+    return f"{scheme}://{credentials}{location}/{name}"
+
+  @classmethod
+  def is_sqlite(cls):
+    return cls.database_url().startswith("sqlite")
+
+  # --- http server ----------------------------------------------------
+
+  HOST_VAR = "API_HOST"
+  PORT_VAR = "API_PORT"
+  RELOAD_VAR = "API_RELOAD"
+
+  DEFAULT_HOST = "127.0.0.1"
+  DEFAULT_PORT = 8000
+
+  @classmethod
+  def host(cls):
+    return os.getenv(cls.HOST_VAR) or cls.DEFAULT_HOST
+
+  @classmethod
+  def port(cls):
+    return cls.as_int(cls.PORT_VAR, cls.DEFAULT_PORT)
+
+  @classmethod
+  def reload(cls):
+    return cls.as_bool(cls.RELOAD_VAR, False)
+
+  # --- logging --------------------------------------------------------
+
+  LOG_LEVEL_VAR = "LOG_LEVEL"
+  """`debug`, `info`, `warning` (default), `error` or `critical`."""
+
+  LOG_FILE_VAR = "LOG_FILE"
+  """Optional. When set, logs also go to this file instead of the console."""
+
+  LOG_FORMAT_VAR = "LOG_FORMAT"
+  """`text` (default) or `json` for structured lines."""
+
+  DEFAULT_LOG_LEVEL = "WARNING"
+
+  @classmethod
+  def log_level(cls):
+    return (os.getenv(cls.LOG_LEVEL_VAR) or cls.DEFAULT_LOG_LEVEL).upper()
+
+  @classmethod
+  def log_file(cls):
+    return os.getenv(cls.LOG_FILE_VAR)
+
+  @classmethod
+  def log_format(cls):
+    return (os.getenv(cls.LOG_FORMAT_VAR) or "text").lower()
+
+  @classmethod
+  def log_configured(cls):
+    """Whether the operator asked for more logging than the default.
+
+    Logging stays off unless asked for, so a normal run prints only what
+    matters: errors and the server's own startup lines.
+    """
+    return bool(os.getenv(cls.LOG_FILE_VAR)) or cls.log_level() != cls.DEFAULT_LOG_LEVEL
+
+  # --- dashboard ------------------------------------------------------
+
+  DASHBOARD_SECRET_VAR = "DASHBOARD_SECRET"
+  """Signing key for dashboard tokens. Generated and stored if unset."""
+
+  @classmethod
+  def dashboard_secret(cls):
+    return os.getenv(cls.DASHBOARD_SECRET_VAR)
+
+  SUPER_ADMIN_USERNAME_VAR = "SUPER_ADMIN_USERNAME"
+  SUPER_ADMIN_PASSWORD_VAR = "SUPER_ADMIN_PASSWORD"
+  """Both required on a database with no super account; there is no default."""
+
+  @classmethod
+  def super_username(cls):
+    return os.getenv(cls.SUPER_ADMIN_USERNAME_VAR)
+
+  @classmethod
+  def super_password(cls):
+    return os.getenv(cls.SUPER_ADMIN_PASSWORD_VAR)
+
+  # --- cron / tracking queue -------------------------------------------
+
+  CRON_INTERVAL_VAR = "CRON_INTERVAL"
+  """Seconds between queue passes. Default 300, i.e. every five minutes."""
+
+  CRON_DELAY_VAR = "CRON_DELAY"
+  """Seconds to wait between two target fetches. The queue hits the live site
+    once per tracked product, and going slowly is what keeps it a guest rather
+    than a load. Default 1.0."""
+
+  DEFAULT_CRON_INTERVAL = 300
+  DEFAULT_CRON_DELAY = 1.0
+
+  @classmethod
+  def cron_interval(cls):
+    return cls.as_int(cls.CRON_INTERVAL_VAR, cls.DEFAULT_CRON_INTERVAL)
+
+  @classmethod
+  def cron_delay(cls):
+    raw = os.getenv(cls.CRON_DELAY_VAR)
+
+    if raw is None or raw == "":
+      return cls.DEFAULT_CRON_DELAY
+
+    try:
+      return max(0.0, float(raw))
+    except ValueError:
+      raise ValueError(
+        f"{cls.CRON_DELAY_VAR} must be a number of seconds, got {raw!r}"
+      ) from None
+
+  # --- parsing --------------------------------------------------------
+
+  @classmethod
+  def as_int(cls, variable, default):
+    raw = os.getenv(variable)
+    if raw is None or raw == "":
+      return default
+    try:
+      return int(raw)
+    except ValueError:
+      raise ValueError(
+        f"{variable} must be a whole number, got {raw!r}"
+      ) from None
+
+  @staticmethod
+  def as_bool(variable, default=False):
+    """Read a boolean from the environment.
+
+    `bool(os.getenv(...))` is wrong — it makes the string "false" true — so the
+    usual truthy and falsy words are recognised instead.
+    """
+    raw = os.getenv(variable)
+
+    if raw is None or raw == "":
+      return default
+
+    return raw.strip().lower() in ("1", "true", "yes", "on")

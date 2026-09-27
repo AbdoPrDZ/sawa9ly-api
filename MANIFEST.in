@@ -1,0 +1,20 @@
+# The runtime dependency list is read by setup.py at build time, so it has to
+# travel inside the sdist. Without this, `pip install` from a tarball fails with
+# "No such file or directory: requirements.txt".
+include requirements.txt
+include README.md
+include CHANGELOG.md
+include LICENSE
+include src/version.py
+
+# The dashboard's build output is not part of the distribution. The API serves
+# public/dist when it exists and skips the dashboard when it does not, so an
+# sdist without it is a working API-only install.
+prune public
+prune data
+prune .venv
+prune .agents
+
+# Secrets and local state must never end up in a distribution.
+exclude .env
+global-exclude __pycache__ *.py[cod] session

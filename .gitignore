@@ -1,0 +1,62 @@
+# Secrets and local state.
+#
+# The real environment is never committed. `.env.example` IS the committed
+# template, so the broad `.env.*` pattern is negated back below - without that
+# line the template would be ignored along with the secrets.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# The SQLite database, the log file and anything else the app writes at runtime.
+data/
+
+# The pre-database session file. Superseded by the settings table, but an old
+# checkout may still have one.
+session
+
+# Python bytecode.
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments. This project uses .venv, but venv/ and env/ are common
+# enough elsewhere that ignoring them costs nothing.
+.venv/
+venv/
+env/
+
+# setup.py / packaging output.
+build/
+dist/
+*.egg-info/
+.eggs/
+wheels/
+pip-wheel-metadata/
+
+# Tool caches. There is no test suite or linter configured yet; these are here so
+# that adding one does not immediately dirty the tree.
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Node, for the dashboard in public/. public/.gitignore covers its own copy;
+# this catches one created anywhere else.
+node_modules/
+
+# Editors and IDEs. launch.json only ever held a generic debugpy config, but a
+# personal one is exactly the kind of file that must not be published.
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating system junk.
+.DS_Store
+Thumbs.db
+Desktop.ini

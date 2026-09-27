@@ -1,0 +1,7 @@
+requests
+dotenv
+pyquery
+sqlalchemy
+fastapi
+uvicorn[standard]
+tabulate
