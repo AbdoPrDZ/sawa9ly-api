@@ -12,12 +12,34 @@ Two independent credential systems, and confusing them is the main risk here.
 
 A machine request presents an API key; that resolves a `User`; that user's stored
 sawa9ly session is then used for the site. A browser presents a password, gets a
- signed token, and uses that token on `/auth` and `/admin`. **Neither
+ signed token, and uses that token on `/api/auth` and `/api/admin`. **Neither
 credential reaches the site and the site's cookie is never sent to a client.**
 
-`Authorization: Bearer` is overloaded: an API key on the `/v1/cart` and
-`/v1/orders` routes, a dashboard token on `/auth` and `/admin`. They are separate dependencies
-with separate token formats, so nothing is accepted by both.
+`Authorization: Bearer` is overloaded, and the two tokens have different formats,
+so a value has to be tried as each before either can be ruled out. Two
+dependencies read it: `get_current_user` accepts **only** an API key, and
+`get_any_user` accepts either, token first.
+
+`get_any_user` is for the resources a machine and the dashboard both need — today
+`/api/v1/trackers`, `/api/v1/orders`, `/api/v1/clients` and `/api/v1/pages`.
+Widening to a token is only safe on a route that scopes by `order.user_id`,
+`client.user_id` or `page.user_id` in the database; it must never be used on a
+route where the credential is the only thing standing between the caller and
+another user's data. `/api/v1/cart`, `/api/v1/checkout` and `/api/v1/products`
+stay API-key only for that reason.
+
+`/api/admin/orders` is the deliberate exception that proves the rule: it spans users,
+so it takes a **dashboard token only** and additionally requires the `super` role
+(`Dependencies.require_super`). No API key can reach it, however old.
+
+## The signing secret lives in the database
+
+`Token.signing_secret` falls back to a row in `app_secrets` when `DASHBOARD_SECRET`
+is not set, so the key survives a restart. The cost is that **deleting the
+database invalidates every dashboard session at once** — a fresh `app_secrets` means
+a new key, and every outstanding token stops verifying. The symptom is that
+everybody is signed out at the same moment with no error from the site. Set
+`DASHBOARD_SECRET` in the environment if that matters; see `config.md`.
 
 ## API keys
 
@@ -124,8 +146,8 @@ The whole matrix is in `src/services/accounts.py` as `may_*` methods returning
 - the `reason` string is what the API returns, and every one of them says what to
   do instead rather than just refusing.
 
-Self-service is separate from administration on purpose: `/auth/me/profile` is
-open to any signed-in user, and `/admin/users/{id}` is super-only. A user
+Self-service is separate from administration on purpose: `/api/auth/me/profile` is
+open to any signed-in user, and `/api/admin/users/{id}` is super-only. A user
 changing their own password never needs an administrator, and an administrator
 has no business changing it for them.
 
@@ -146,8 +168,10 @@ Consequences worth respecting:
   not leak anything else.
 - Credentials are a secret. They live in a gitignored database, and the
   `credentials()` accessor exists so no caller reaches around it into the columns.
-- There is no default user, so `--user` is required on every command that acts
-  for an account. See `config.md`.
+- `--user` is optional and falls back to the `super` account, read from the
+  database rather than the environment. An installation with several supers is
+  refused rather than guessed at, because silently acting for the wrong account is
+  the failure this prevents. See `config.md`.
 
 ## Adding to this area
 

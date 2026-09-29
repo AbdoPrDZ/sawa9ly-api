@@ -43,44 +43,52 @@ whole identity, including their sawa9ly session and therefore their cart.
 | Who holds it | your integration | a person, in a browser |
 | Names a user | yes, permanently | yes, until it expires |
 | Expires | only if you gave `--expires-in-days`, otherwise never | 12 hours |
-| Used on | `/v1/*` | `/auth/*`, `/admin/*` |
+| Used on | `/api/v1/*` | `/api/auth/*`, `/api/admin/*` |
 
 `Authorization: Bearer` is overloaded on purpose to keep machine callers
 conventional, but the two token types are not interchangeable: an API key on an
-`/admin` route is not a dashboard token and will not work.
+`/api/admin` route is not a dashboard token and will not work.
 
 Get a dashboard token by exchanging credentials:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/auth/login \
+curl -X POST http://127.0.0.1:8000/api/auth/login \
   -H 'content-type: application/json' \
   -d '{"username":"admin","password":"..."}'
 ```
 
-The `/auth` and `/admin` routes exist for the bundled dashboard. If you are
-writing an integration, you want an API key and `/v1`.
+The `/api/auth` and `/api/admin` routes exist for the bundled dashboard. If you are
+writing an integration, you want an API key and `/api/v1`.
 
-## Versioning
+## Namespacing and versioning
 
-The machine-facing routes are under **`/v1`**. That prefix is the version of the
-wire format, not of the application — the two move independently, so a bug fix
-can ship as 1.3.1 while the contract is still `/v1`. A future `/v2` will be added
-*alongside* `/v1`, never in place of it, so existing clients keep working.
+**Every route sits under `/api`.** That outer namespace is where the whole
+surface lives, so the whole surface can be mounted somewhere else later without
+any of its paths changing. The dashboard's own assets are the one exception and
+are served from `/dashboard`, and a published landing page is served from
+`/pages/{public_id}` — both outside `/api`, because they are HTML for a person
+rather than a resource for a client.
 
-Three groups are unversioned, each for a different reason:
+The machine-facing routes are then versioned: **`/api/v1`**. That prefix is the
+version of the wire format, not of the application — the two move independently,
+so a bug fix can ship as 1.3.1 while the contract is still `/api/v1`. A future
+`/v2` will be added *alongside* `/api/v1`, never in place of it, so existing clients
+keep working.
+
+Three things are unversioned, each for a different reason:
 
 | Route | Why |
 | --- | --- |
-| `GET /health` | A load balancer or container health check is configured against a fixed path. |
-| `GET /me` | A meta route, not part of the resource contract. |
-| `/auth/*`, `/admin/*` | The bundled dashboard is the only caller. |
+| `GET /api/health` | A load balancer or container health check is configured against a fixed path. |
+| `GET /api/me` | A meta route, not part of the resource contract. |
+| `/api/auth/*`, `/api/admin/*` | The bundled dashboard is the only caller. |
 
 ## Conventions
 
 - Request and response bodies are JSON. Send `content-type: application/json`.
 - Credentials go in a header, never a query string — a query string ends up in
   proxy logs and browser history.
-- `GET /v1/catalogue/{id}` and friends return the resource. Creation returns
+- `GET /api/v1/catalogue/{id}` and friends return the resource. Creation returns
   `201` with the created object.
 - A dashboard token is verified against the server on every request, so revoking
   a key or demoting a user takes effect immediately rather than at expiry.
@@ -104,8 +112,8 @@ with `detail` as a *list* of `{loc, msg, type}`, so handle both shapes.
 The `409` / `502` split is the one worth internalising: `409` means fix your
 request, `502` means the upstream site is unhappy. Treat them differently.
 
-> **Note.** `/v1/catalogue` currently answers **without any credential**. Every
-> other `/v1` route needs an API key. If you are calling it, do not send secrets
+> **Note.** `/api/v1/catalogue` currently answers **without any credential**. Every
+> other `/api/v1` route needs an API key. If you are calling it, do not send secrets
 > expecting them to be checked.
 
 ## Workflows
@@ -117,7 +125,7 @@ curl -X POST http://127.0.0.1:8000/v1/catalogue/5663 -H "X-API-Key: sk_..."
 ```
 
 This scrapes the live product page and stores the result. It returns the saved
-product. From then on, read it with `GET /v1/catalogue/5663` rather than
+product. From then on, read it with `GET /api/v1/catalogue/5663` rather than
 re-scraping.
 
 ### Build and inspect a cart
@@ -150,7 +158,7 @@ it. That is why checkout re-applies prices immediately before submitting.
 be cancelled from here. There is no undo endpoint, because there is no undo at
 the site.
 
-`POST /v1/checkout` takes the quantities, the prices, and the delivery details,
+`POST /api/v1/checkout` takes the quantities, the prices, and the delivery details,
 and submits the order. Use `dry_run` to stop before the form:
 
 ```json
@@ -185,7 +193,7 @@ commune options; the endpoint handles that ordering for you.
 ### Draft orders
 
 For anything you want to review before submitting, use the order resource rather
-than `/v1/checkout`. Build a draft, add lines, then submit it explicitly:
+than `/api/v1/checkout`. Build a draft, add lines, then submit it explicitly:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/orders -H "X-API-Key: sk_..." -H 'content-type: application/json' -d '{"client_id":1}'
@@ -199,13 +207,13 @@ the site until the final call.
 
 ## Etiquette
 
-Every `/v1` call that touches the site's cart reaches out to sawa9ly.app, which
+Every `/api/v1` call that touches the site's cart reaches out to sawa9ly.app, which
 has no API and does not expect programmatic traffic. A few things keep this a good
 guest:
 
 - **Do not poll the cart in a tight loop.** Each read is a real page request.
-- **Prefer the catalogue over re-scraping.** `GET /v1/catalogue/{id}` is a local
-  read; `POST /v1/catalogue/{id}` is a live scrape.
+- **Prefer the catalogue over re-scraping.** `GET /api/v1/catalogue/{id}` is a local
+  read; `POST /api/v1/catalogue/{id}` is a live scrape.
 - **Quantity changes cost one request per unit**, and the endpoint caps a single
   jump at 50 units. Do not attempt to move thousands.
 - **There is deliberately no endpoint that triggers a tracking pass.** One web

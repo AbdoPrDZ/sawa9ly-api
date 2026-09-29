@@ -47,16 +47,29 @@ scrape reports `availability`, the column is `available` — and reading the wro
 key returns `None`, which looks like a change on every single pass. That bug
 happened; the map is the fix.
 
-## Two services, on purpose
+## Scheduled work, by kind
 
 | Service | Knows about |
 | --- | --- |
 | `src/services/tracking.py` | products, comparing two scrapes, what to record |
-| `src/services/cron.py` | timing, locking, reporting. Nothing about products |
+| `src/services/order_sync.py` | posted orders, reconciling our state with the site's |
+| `src/services/cron.py` | timing, locking, reporting. Nothing about what it runs |
 
-`Cron` calls `Tracking.scan_once` through a small job registry, so adding a
-second kind of scheduled work means adding a job, not teaching the scheduler about
-products.
+`Cron` calls `scan_once` on each through a small job registry, so adding a third
+kind of scheduled work means adding a job, not teaching the scheduler about it. A
+job is a `(name, callable)` pair and is handed `delay` and `target_model` whether
+or not it uses them, because `run_once` passes the same keywords to every one.
+
+`OrderSync.scan_once` is the second job. It reads each order's own page through
+`src/services/order_page.py` and moves our state to the site's — but only for
+`cancelled`, the one site state actually observed. Anything else is reported as a
+**disagreement** and left alone: `cancelled` is terminal, so a state guessed from
+an unrecognised word could not be undone by running the pass again. A `done` or
+`cancelled` order is skipped entirely rather than re-read.
+
+Orders without an `origin_id` are skipped: there is no page to read. An order
+placed before the id was recorded is therefore never reconciled, and its id has
+to be set by hand.
 
 ## Running it
 
@@ -117,7 +130,7 @@ anything is watched is a clean no-op rather than a failed login.
 
 ## API
 
-`/v1/trackers` mirrors the CLI: list, watch, unwatch. It accepts **either** an API
+`/api/v1/trackers` mirrors the CLI: list, watch, unwatch. It accepts **either** an API
 key or a dashboard token, because both a machine and the browser need to manage
 the same subscriptions.
 

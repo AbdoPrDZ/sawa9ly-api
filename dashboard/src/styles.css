@@ -79,7 +79,22 @@ code {
 }
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.brand-logo {
+  /* Sized for a 20px-tall mark rather than its natural size, and constrained
+     so a large source logo cannot stretch the bar. */
+  height: 20px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+  border-radius: 3px;
+  flex: none;
 }
 
 .topbar nav {
@@ -208,9 +223,15 @@ tbody tr:hover {
 }
 
 .badge-revoked,
-.badge-expired {
+.badge-expired,
+.badge-cancelled {
   color: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.badge-confirmed {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 /* --- forms ------------------------------------------------------- */
@@ -235,7 +256,8 @@ tbody tr:hover {
 }
 
 input,
-select {
+select,
+textarea {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--line);
@@ -246,7 +268,8 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
   outline-offset: -1px;
 }

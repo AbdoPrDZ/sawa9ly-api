@@ -2,7 +2,7 @@
 
 Run from a checkout with `python main.py <command>`. Installing is optional and
 gives you a `sawa9ly` console script; see the note in the README about where an
-installed copy looks for `data/` and `public/dist`.
+installed copy looks for `data/` and `dashboard/dist`.
 
 The version is read with a regex rather than by importing `src`, because
 importing the package would need the dependencies installed already — which is

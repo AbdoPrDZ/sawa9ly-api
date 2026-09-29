@@ -8,7 +8,13 @@ from src.schemas import ClientIn, ClientOut
 
 
 class ClientController:
-  """The delivery recipients a user's orders are addressed to."""
+  """The delivery recipients a user's orders are addressed to.
+
+  Auth is `get_any_user`, so an API key or a dashboard token both work: the
+  dashboard manages the signed-in user's own recipients, and a machine drives
+  them from the CLI. Every handler is scoped to `client.user_id == caller.id`, so
+  neither credential reaches another user's clients.
+  """
 
   router = APIRouter(prefix="/clients", tags=["clients"])
 
@@ -22,11 +28,11 @@ class ClientController:
     return client
 
   @router.get("", response_model=list)
-  def list_clients(user=Depends(Dependencies.get_current_user), db=Depends(Dependencies.get_db)):
+  def list_clients(user=Depends(Dependencies.get_any_user), db=Depends(Dependencies.get_db)):
     return [c.as_dict() for c in Client.all(db, user.id)]
 
   @router.post("", response_model=ClientOut)
-  def create(body: ClientIn, user=Depends(Dependencies.get_current_user),
+  def create(body: ClientIn, user=Depends(Dependencies.get_any_user),
              db=Depends(Dependencies.get_db)):
     """Add a client, or update the one with the same name."""
     client = Client.get_or_create(
@@ -37,6 +43,6 @@ class ClientController:
     return client.as_dict()
 
   @router.get("/{client_id}", response_model=ClientOut)
-  def read(client_id: int, user=Depends(Dependencies.get_current_user),
+  def read(client_id: int, user=Depends(Dependencies.get_any_user),
            db=Depends(Dependencies.get_db)):
     return ClientController._owned(db, client_id, user).as_dict()

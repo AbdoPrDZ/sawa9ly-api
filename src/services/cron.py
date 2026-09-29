@@ -52,10 +52,12 @@ class Cron:
     A job takes no scanner argument. The queue is global: it works across every
     user's watches and decides for itself whose session to browse with.
     """
+    from src.services.order_sync import OrderSync
     from src.services.tracking import Tracking
 
     return (
       ('tracking', Tracking.scan_once),
+      ('orders', OrderSync.scan_once),
     )
 
   # --- one pass -------------------------------------------------------
@@ -223,22 +225,52 @@ class Cron:
 
   @staticmethod
   def _report(summary, passes, interval):
-    jobs = summary['jobs'].get('tracking') or {}
+    """One line per job, then anything any of them complained about.
+
+    Reports whatever jobs the queue is running rather than the one it was written
+    for, so a job added later cannot pass by every time without being mentioned.
+    """
     Cron._say(
-      "pass {0}: scanned {1}, changed {2}, trackers {3}, errors {4} in {5}s "
-      "(every {6}s)".format(
-        passes,
-        jobs.get('scanned', 0),
-        jobs.get('changed', 0),
-        jobs.get('trackers', 0),
-        len(jobs.get('errors', [])) + len(summary['errors']),
-        summary['duration_seconds'],
-        interval,
+      "pass {0} in {1}s (every {2}s)".format(
+        passes, summary['duration_seconds'], interval
       )
     )
 
-    for message in summary['errors'] + jobs.get('errors', []):
+    for name, result in summary['jobs'].items():
+      Cron._say(f"  {name}: {Cron._counts(result)}")
+
+    for message in summary['errors']:
       Cron._say(f"  ! {message}")
+
+    for name, result in summary['jobs'].items():
+      for message in result.get('errors', []):
+        Cron._say(f"  ! {name}: {message}")
+
+      for message in result.get('disagreements', []):
+        # Not a failure: the site says something we did not act on, which is
+        # worth reading but is not a broken pass.
+        Cron._say(f"  ~ {name}: {message}")
+
+  @staticmethod
+  def _counts(result):
+    """A job's headline numbers, leaving out the ones it has nothing in.
+
+    Not every job has every figure, so a fixed list is filtered rather than
+    printed with zeros: a queue that did nothing should read as "nothing to do",
+    not as a page of zeroes.
+    """
+    if not isinstance(result, dict):
+      return str(result)
+
+    parts = [f"scanned {result['scanned']}"] if 'scanned' in result else []
+
+    parts += [
+      f"{key} {result[key]}"
+      for key in ('changed', 'unchanged', 'skipped', 'trackers', 'clients')
+      if result.get(key)
+    ]
+
+    return ", ".join(parts) or "nothing to do"
 
   @staticmethod
   def _say(message):

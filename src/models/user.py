@@ -92,6 +92,9 @@ class User(Base):
   orders: Mapped[list["Order"]] = relationship(
     back_populates="user", cascade="all, delete-orphan", lazy="selectin",
   )
+  landing_pages: Mapped[list["LandingPage"]] = relationship(
+    back_populates="user", cascade="all, delete-orphan", lazy="selectin",
+  )
 
   # --- lookups ------------------------------------------------------
 

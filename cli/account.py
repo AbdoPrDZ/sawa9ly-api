@@ -40,16 +40,16 @@ class AccountCli:
     key_actions = apikey.add_subparsers(dest='action', required=True)
 
     create = key_actions.add_parser('create', help="create a key for a user")
-    create.add_argument('--user', required=True, help="the account the key is for")
+    create.add_argument('--user', help="the account the key is for; defaults to the super admin")
     create.add_argument('--label', default=None)
     create.add_argument('--expires-in-days', type=int, default=None)
 
     listing = key_actions.add_parser('list', help="list a user's keys")
-    listing.add_argument('--user', required=True, help="the account to list for")
+    listing.add_argument('--user', help="the account to list for; defaults to the super admin")
 
     revoke = key_actions.add_parser('revoke', help="revoke a key by its prefix")
     revoke.add_argument('prefix')
-    revoke.add_argument('--user', required=True, help="the account the key belongs to")
+    revoke.add_argument('--user', help="the account the key belongs to; defaults to the super admin")
 
   @staticmethod
   def dispatch(args):

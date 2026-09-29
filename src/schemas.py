@@ -121,24 +121,73 @@ class OrderCreateIn(BaseModel):
 
 
 class OrderLineIn(BaseModel):
+  # `note` is read only by the add route. The set-quantity and set-price routes
+  # share this body and ignore it, exactly as they ignore each other's field.
   product_id: int | None = None
   quantity: int = Field(default=1, ge=1)
   price: int | None = Field(default=None, ge=1)
+  note: str | None = None
 
 
 class OrderCheckoutIn(BaseModel):
   dry_run: bool = False
 
 
+class PageCreateIn(BaseModel):
+  """A new landing page. `product_id` is the sawa9ly id, as everywhere else."""
+
+  product_id: int
+  title: str = Field(min_length=1)
+  html: str = ""
+
+
+class PageUpdateIn(BaseModel):
+  """A change to a page. Every field is optional: absent means unchanged.
+
+  Sending `html` as an empty string clears it, which is different from omitting
+  the key. Omitting the key is the only way to leave the markup alone.
+  """
+
+  title: str | None = Field(default=None, min_length=1)
+  html: str | None = None
+  state: str | None = None
+
+
+class PageOut(BaseModel):
+  id: int
+  user_id: int
+  # Our own products.id, the thing a line is keyed by. The sawa9ly id comes
+  # back alongside it so a caller never has to guess which one it holds.
+  product_id: int
+  sawa9ly_product_id: int | None = None
+  product_title: str | None = None
+  # The token the page is served under. `id` must never appear in a public URL,
+  # because it is ours and enumerable.
+  public_id: str
+  title: str
+  html: str
+  state: str
+  created_at: str | None = None
+  updated_at: str | None = None
+
+
 class OrderOut(BaseModel):
   id: int
   state: str
   client_id: int | None = None
+  # The order number the website generated when this was posted, e.g. 879988.
+  # Null until then, and for a draft or a cancelled order that never reached the
+  # site.
+  origin_id: int | None = None
   reference: str | None = None
   note: str | None = None
   total: int
   lines: list[dict] = Field(default_factory=list)
   created_at: str | None = None
+  # The owner's username. Only the super-only admin listing sets it, because it
+  # is the one view that spans users and so has to say whose orders they are;
+  # the per-user routes omit it, where it would be redundant.
+  username: str | None = None
 
 
 # --- dashboard auth and administration ---------------------------------
@@ -160,7 +209,7 @@ class SessionOut(BaseModel):
   """A signed-in dashboard session.
 
   `token` is a signed token, not an API key. It expires, and it is only ever
-  accepted on `/auth` and `/admin` routes.
+  accepted on the `/api/auth` and `/api/admin` routes.
   """
 
   token: str

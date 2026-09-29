@@ -14,18 +14,28 @@ class OrderState:
   draft     - being built; lines may be added, removed and edited
   confirmed - posted to the website; no longer editable
   done      - finished with
+  cancelled - called off, from a draft or after posting
+
+  `cancelled` is terminal and reachable from both `draft` and `confirmed`: a
+  draft can be abandoned, and a posted order can be called off. It is not
+  reachable from `done`, because an order that has run its course is finished
+  rather than cancelled, and undoing that is an accounting question rather than a
+  state change. There is no way back out of `cancelled` either — restoring a
+  cancelled order is a new order, so the history stays honest.
   """
 
   DRAFT = "draft"
   CONFIRMED = "confirmed"
   DONE = "done"
+  CANCELLED = "cancelled"
 
-  ALL = (DRAFT, CONFIRMED, DONE)
+  ALL = (DRAFT, CONFIRMED, DONE, CANCELLED)
   EDITABLE = (DRAFT,)
   TRANSITIONS = {
-    DRAFT: (CONFIRMED,),
-    CONFIRMED: (DONE,),
+    DRAFT: (CONFIRMED, CANCELLED),
+    CONFIRMED: (DONE, CANCELLED),
     DONE: (),
+    CANCELLED: (),
   }
 
   @staticmethod
@@ -48,6 +58,13 @@ class Order(Base):
     ForeignKey("clients.id", ondelete="SET NULL"), default=None, index=True
   )
   state: Mapped[str] = mapped_column(String(16), default=OrderState.DRAFT, index=True)
+  # The order number the website generated when this was posted, e.g. 879988.
+  #
+  # Distinct from `reference`, which is whatever text the site handed back and
+  # has always been a string. This one is the numeric id, so it can be compared,
+  # indexed and looked up — which is what makes it possible to ask the site about
+  # a specific order later without matching on a string.
+  origin_id: Mapped[int | None] = mapped_column(Integer, default=None, index=True)
   # The reference the website returns once the order is submitted.
   reference: Mapped[str | None] = mapped_column(String(128), default=None)
   note: Mapped[str | None] = mapped_column(Text, default=None)
@@ -112,6 +129,7 @@ class Order(Base):
       'id': self.id,
       'state': self.state,
       'client_id': self.client_id,
+      'origin_id': self.origin_id,
       'reference': self.reference,
       'note': self.note,
       'total': self.total(),

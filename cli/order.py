@@ -1,5 +1,6 @@
 """CLI: orders."""
 
+from src.models import OrderState
 from src.services import OrderService
 
 
@@ -13,13 +14,15 @@ class OrderCli:
 
     create = actions.add_parser('create', help="start a draft order")
     create.add_argument('--client', type=int, default=None)
-    create.add_argument('--user', required=True, help="whose order it is")
+    create.add_argument('--note', default=None, help="a note about the order as a whole")
+    create.add_argument('--user', help="whose order it is; defaults to the super admin")
 
     add = actions.add_parser('add', help="add a product to a draft order")
     add.add_argument('order_id', type=int)
     add.add_argument('product_id')
     add.add_argument('--quantity', type=int, default=1)
     add.add_argument('--price', type=int, default=None)
+    add.add_argument('--note', default=None, help="a note about this line only")
 
     remove = actions.add_parser('remove', help="remove a product from a draft order")
     remove.add_argument('order_id', type=int)
@@ -38,14 +41,16 @@ class OrderCli:
     checkout = actions.add_parser('checkout', help="submit a draft order to the site")
     checkout.add_argument('order_id', type=int)
     checkout.add_argument('--dry-run', action='store_true')
-    checkout.add_argument('--user', required=True, help="whose sawa9ly session to use")
+    checkout.add_argument('--user', help="whose sawa9ly session to use; defaults to the super admin")
 
     state = actions.add_parser('state', help="move an order to another state")
     state.add_argument('order_id', type=int)
-    state.add_argument('state', choices=['draft', 'confirmed', 'done'])
+    # Taken from the state machine rather than listed here, so a new state is
+    # accepted by the CLI as soon as the model allows it.
+    state.add_argument('state', choices=list(OrderState.ALL))
 
     listing = actions.add_parser('list', help="list orders")
-    listing.add_argument('--user', required=True, help="whose orders to list")
+    listing.add_argument('--user', help="whose orders to list; defaults to the super admin")
     listing.add_argument('--state', default=None)
 
     show = actions.add_parser('show', help="show an order")
@@ -57,11 +62,15 @@ class OrderCli:
 
     with Cli.db() as db:
       if args.action == 'create':
-        return OrderService.create(db, args.user, client_id=args.client).as_dict()
+        return OrderService.create(
+          db, args.user, client_id=args.client, note=args.note
+        ).as_dict()
 
       if args.action == 'add':
-        return OrderService.add_line(db, args.order_id, args.product_id,
-                                     args.quantity, args.price).as_dict()
+        return OrderService.add_line(
+          db, args.order_id, args.product_id,
+          args.quantity, args.price, args.note,
+        ).as_dict()
 
       if args.action == 'remove':
         return OrderService.remove_line(db, args.order_id, args.product_id).as_dict()

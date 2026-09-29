@@ -15,10 +15,10 @@ class ClientCli:
     add.add_argument('--wilaya-id', type=int, default=None)
     add.add_argument('--commune-id', type=int, default=None)
     add.add_argument('--note', default=None)
-    add.add_argument('--user', required=True, help="the account to act as")
+    add.add_argument('--user', help="the account to act as; defaults to the super admin")
 
     listing = actions.add_parser('list', help="list a user's clients")
-    listing.add_argument('--user', required=True, help="the account to act as")
+    listing.add_argument('--user', help="the account to act as; defaults to the super admin")
 
   @staticmethod
   def dispatch(args):

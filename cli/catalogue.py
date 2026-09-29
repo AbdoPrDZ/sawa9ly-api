@@ -13,7 +13,7 @@ class CatalogueCli:
 
     save = actions.add_parser('save', help="scrape a product and save it")
     save.add_argument('product_id', nargs='?')
-    save.add_argument('--user', required=True, help="the account to scrape as")
+    save.add_argument('--user', help="the account to scrape as; defaults to the super admin")
 
     show = actions.add_parser('show', help="show a saved product")
     show.add_argument('product_id')

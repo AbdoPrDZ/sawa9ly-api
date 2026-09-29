@@ -29,7 +29,7 @@ export function Login() {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={onSubmit}>
-        <h1>sawa9ly admin</h1>
+          <h1>Sawa9ly API Dashboard</h1>
         <p className="muted">Sign in to manage users and API keys.</p>
 
         {error ? <Banner kind="error">{error}</Banner> : null}

@@ -57,18 +57,27 @@ test can change the environment and re-read.
 URL-encoded when a URL is assembled from parts, because a password containing
 `@` or `/` would otherwise parse into the wrong place.
 
-## There is no default user
+## The default user is the super admin
 
-There is no `DEFAULT_USER`, no `default_username()`, and no `Livewire()` with no
-arguments. Every command that acts for an account requires `--user`, and every
-page service requires a client.
+`--user` is **optional**. A command that acts for an account and was not told
+which one falls back to the `super`, resolved from the database by
+`Cli.super_username()` — not from the environment, so nothing in `.env` can
+quietly redirect a command onto an account nobody named.
 
-This is a security decision, not a convenience one. A default account means a
-command run without arguments operates on somebody's cart without anybody asking
-for it — and once more than one user exists, it is never obvious which one a
-default would have picked. The same reasoning removed the `SAWA9LY_EMAIL` /
-`SAWA9LY_PASSWORD` fallback: every user stores its own site credentials, so an
-API-key user can never silently borrow the operator's account.
+There is still no `DEFAULT_USER` setting and no `Livewire()` with no arguments:
+every page service requires a client. What changed is only that the CLI may
+supply the name for you.
+
+**An installation with more than one `super` is refused, not guessed at.** If
+`SUPER_ADMIN_USERNAME` names one of them that one is used; otherwise the CLI
+lists the candidates and exits rather than picking the earliest-created, which
+would be the silent-wrong-account problem the original rule existed to prevent.
+The same reasoning removed the `SAWA9LY_EMAIL` / `SAWA9LY_PASSWORD` fallback:
+every user stores its own site credentials, so an API-key user can never silently
+borrow the operator's account.
+
+The resolution happens once in `App.run`, before dispatch, so every command group
+receives a concrete name and none of them knows the fallback exists.
 
 ## Booleans are parsed, not coerced
 

@@ -18,7 +18,7 @@ deviation or "fix" it by accident.
 - **Controllers** (`src/controllers/`) own an `APIRouter` and register handlers in
   the class body. They translate HTTP to a service call and back, and hold no
   business logic. **One controller per resource**, so admin users and admin API
-  keys are two controllers even though both live under `/admin`.
+  keys are two controllers even though both live under `/api/admin`.
 - **Auth utilities** (`src/utils/`) are split by concern: `passwords.py` holds
   `Passwords`, `tokens.py` holds `Token`. They have no dependency on each other.
 - **Domain services** (`src/services/`) are split by what they know, not by

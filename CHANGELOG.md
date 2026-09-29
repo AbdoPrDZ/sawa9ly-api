@@ -11,6 +11,84 @@ file, so there is no second place to update.
 
 ## [Unreleased]
 
+### Added
+
+- **Landing pages.** A user can write an HTML page per product and publish it at
+  `/pages/{public_id}`. `LandingPage` and `PageState` are the entity, a page
+  model can only exist for a product — so the dashboard never faces a page with
+  nothing behind it — and the project is a deliberate difference from
+  `OrderState`, where the site's own wording wins. A published page is served
+  under a `Content-Security-Policy: sandbox`, with `allow-scripts` and
+  `allow-popups` and no `allow-same-origin`, so page HTML runs without being able
+  to reach the API's cookies or its storage. `PageController` mirrors the CLI at
+  `/api/v1/pages`; `PublicPageController` serves the page itself and is
+  registered last, because it is a catch-all at the site root.
+- **`/api/admin/orders`**, listing and fetching any user's orders. It is the one
+  route that crosses user boundaries, so it asks for `require_super` rather than
+  the usual `require_admin`.
+- **A `cancelled` order state**, reachable from `draft` and from `confirmed` and
+  terminal once there. A draft can be abandoned and a posted order can be called
+  off, so both need a way to say so; `done` deliberately cannot be cancelled,
+  because an order that has run its course is finished rather than called off and
+  undoing that is an accounting question rather than a state change.
+- **`orders.origin_id`**, the order number the site generates (`879988`, say).
+  Distinct from `reference`, which was always text: this one is an integer, so it
+  can be compared, indexed and looked up, and that is what makes one specific
+  order addressable on the site afterwards.
+- **`src/services/order_page.py`**, a `Selector` page model for the site's own
+  `/order/{origin_id}` page. It reads the order's reference, status, delivery
+  details, financial summary and its lines. Each line is recognised by the
+  product link it carries, because that link is the only place the sawa9ly product
+  id appears on the page; the site's own price for the line is read alongside the
+  charged one, which makes it an independent check on `origin_price` rather than
+  a copy of what we sent.
+- **`src/services/order_sync.py` and a second queue job.** A pass now reconciles
+  each posted order's state against the site's, so an order cancelled on the site
+  becomes `cancelled` here without anyone retyping it. Only `cancelled` is
+  applied — the one state the site has actually been seen to report — and
+  anything else, including a move our state machine forbids, is reported as a
+  disagreement rather than guessed at, because `cancelled` is terminal and a wrong
+  read could not be undone by running the pass again. An order with no
+  `origin_id` is skipped: there is no page to read.
+
+### Fixed
+
+- **`_origin_id` reads the shape the site actually returns.** The submit does not
+  hand back a number; it returns a serialised Eloquent model, a list whose second
+  element is `{'class': 'App\\Models\\Order', 'key': 879988, 's': 'mdl'}`, and the
+  id is its `key`. The old code did `str()` on that list, so `reference` held a
+  Python repr of a PHP array. The value is now searched for rather than assumed,
+  `reference` holds a clean `879988`, and an unrecognised shape yields no id at
+  all — a wrong id would be stored and then used to ask the site about an order
+  that is not this one.
+- **`Cron._report` no longer reports one job by name.** It was hardcoded to
+  `tracking`, so the pass line could not have mentioned the orders job even once
+  there was one. It now reports whatever the queue is running, and prints
+  disagreements under `~` so they are distinguishable from errors.
+- **`OrderStateBadge` cannot render a `cancelled` order as `done`.** It fell
+  through to the `done` badge for any state it did not recognise, so a cancelled
+  order would have been drawn as a successful one. It is a lookup keyed by state
+  now, and the CLI takes its `state` choices from `OrderState.ALL` rather than a
+  hand-written list that had already drifted out of step with the model.
+
+### Changed
+
+- **Every route moved under `/api`.** This breaks any existing client:
+  `/v1/products` is now `/api/v1/products`, `/auth/login` is now
+  `/api/auth/login`, `/admin/users` is now `/api/admin/users`, and `/health` and
+  `/me` are now `/api/health` and `/api/me`. `API_BASE` is one parent prefix, so
+  the outer namespace is written down once and no controller carries it.
+- **The dashboard moved from `public/` to `dashboard/`.** `public/` sat next to
+  `src/` and `data/`, and Python packaging swept it up; `dashboard/` names what it
+  is and keeps its `node_modules` and `dist` in one obvious place. It is still
+  served from `dashboard/dist` and still mounted at `/dashboard`.
+
+### Documentation
+
+- The README's project layout, the order state machine, the checkout description
+  and the queue section were all describing the previous behaviour. The queue
+  section now names both jobs and says what the orders job will and will not do.
+
 ## [1.3.0] - 2026-09-27
 
 ### Added

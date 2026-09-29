@@ -51,7 +51,12 @@ class CatalogueController:
     if product is None:
       raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Product {product_id} is not saved; POST /catalogue/{product_id} first.",
+        # No path is spelled out here on purpose. The router's own prefix is
+        # /catalogue and it is mounted under a version and a namespace, so any
+        # absolute path written into this message is one that can quietly go
+        # stale; naming the action cannot.
+        detail=f"Product {product_id} is not saved. POST it first, to scrape "
+               "and store its page.",
       )
 
     return product

@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text, select
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db import Base, utcnow
 
@@ -12,7 +12,9 @@ class Product(Base):
   """A product's scraped details, kept so an order can be built offline.
 
   The catalogue is shared by all users, so there is no user_id here; only the
-  sawa9ly `product_id` is unique.
+  sawa9ly `product_id` is unique. The landing pages written about a product are
+  the exception: those belong to a user, so they hang off `landing_pages` and
+  carry the user themselves.
   """
 
   __tablename__ = "products"
@@ -29,6 +31,10 @@ class Product(Base):
   available: Mapped[bool] = mapped_column(Boolean, default=True)
   created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
   updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+  # No cascade: a product outlives the pages written about it, and removing one
+  # should not silently take a user's writing with it.
+  landing_pages: Mapped[list["LandingPage"]] = relationship(back_populates="product")
 
   @classmethod
   def get(cls, db, product_id):
@@ -82,6 +88,61 @@ class Product(Base):
     if limit:
       query = query.limit(limit)
     return list(db.execute(query).scalars())
+
+  @staticmethod
+  def parse_price(text):
+    """The numeric price out of the site's display text, or None.
+
+    The site writes prices the way it displays them — `'9,500 دج'`, `'585 دج'` —
+    which is text, not a number, and carries a currency abbreviation. This pulls
+    the digits out so a price can be compared or subtracted.
+
+    Separators are disambiguated by position rather than assumed, because both
+    conventions turn up on sites like this one. With both a comma and a dot
+    present the last one is the decimal point, since that is the rightmost and
+    therefore the innermost. With only one kind, a group of exactly three digits
+    after it is a thousands separator and anything shorter is a decimal point.
+    Either way only the whole part is kept: an order line sells in whole units,
+    and dropping cents is better than rounding them into the total.
+
+    Returns None when there is no number in the text at all — "sur demande",
+    "prix non disponible" — because "we do not know" and "it is zero" are
+    different facts and only one of them is true.
+    """
+    if not text:
+      return None
+
+    # Keep only what a number can be made of; the currency and spacing go.
+    cleaned = "".join(char for char in str(text) if char.isdigit() or char in ",. ").replace(" ", "")
+
+    if not any(char.isdigit() for char in cleaned):
+      return None
+
+    commas = [index for index, char in enumerate(cleaned) if char == ","]
+    dots = [index for index, char in enumerate(cleaned) if char == "."]
+
+    if commas and dots:
+      # Both conventions in one string: the rightmost mark is the decimal point.
+      whole = cleaned[: max(commas[-1], dots[-1])]
+    else:
+      marks = commas or dots
+
+      if not marks:
+        whole = cleaned
+      elif len(marks) > 1 or len(cleaned) - marks[-1] - 1 == 3:
+        # Repeated, or a group of three: thousands separators. Drop them all.
+        whole = cleaned
+      else:
+        # A short trailing group: a decimal point. Keep what is before it.
+        whole = cleaned[: marks[-1]]
+
+    digits = "".join(char for char in whole if char.isdigit())
+
+    return int(digits) if digits else None
+
+  def numeric_price(self):
+    """This product's price as a number, or None if the display text has none."""
+    return Product.parse_price(self.price)
 
   def as_dict(self):
     """Catalogue fields as plain values."""

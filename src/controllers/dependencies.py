@@ -4,7 +4,7 @@ from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.db import SessionLocal
-from src.models import ApiKey, User
+from src.models import ApiKey, Role, User
 from src.utils.tokens import Token
 from src.utils.livewire import ensure_db
 
@@ -164,6 +164,32 @@ class Dependencies:
       raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="This action needs an admin account.",
+      )
+
+    return user
+
+  @staticmethod
+  def require_super(
+    user=Depends(get_token_user),
+  ):
+    """A signed-in `super`. Anything less is a 401 or a 403.
+
+    The root role, for the handful of things an administrator must not reach:
+    another user's orders, and site credentials on somebody's behalf. Same
+    401/403 split as `require_admin`, so the dashboard can still tell "sign in"
+    from "not allowed".
+    """
+    if user is None:
+      raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Sign in to the dashboard.",
+        headers={"WWW-Authenticate": "Bearer"},
+      )
+
+    if not Role.is_super(user.role):
+      raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="This action needs a 'super' account.",
       )
 
     return user

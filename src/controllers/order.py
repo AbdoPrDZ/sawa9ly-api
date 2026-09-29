@@ -8,7 +8,14 @@ from src.services import OrderError, OrderService
 
 
 class OrderController:
-  """Building a draft order and submitting it to the site."""
+  """Building a draft order and submitting it to the site.
+
+  Auth is `get_any_user`, so an API key or a dashboard token both work: the
+  dashboard shows a user's own orders, and a machine drives them from the CLI.
+  Widening the credential is safe here because every handler is scoped to
+  `order.user_id == caller.id`, so neither credential reaches another user's
+  orders.
+  """
 
   router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -31,13 +38,13 @@ class OrderController:
       raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error))
 
   @router.get("", response_model=list)
-  def list_orders(user=Depends(Dependencies.get_current_user), db=Depends(Dependencies.get_db)):
+  def list_orders(user=Depends(Dependencies.get_any_user), db=Depends(Dependencies.get_db)):
     from src.services import OrderService as Service
 
     return [o.as_dict() for o in Service.list(db, user.id)]
 
   @router.post("", response_model=OrderOut)
-  def create(body: OrderCreateIn, user=Depends(Dependencies.get_current_user),
+  def create(body: OrderCreateIn, user=Depends(Dependencies.get_any_user),
              db=Depends(Dependencies.get_db)):
     """Start a draft order."""
     return OrderController._run(
@@ -45,21 +52,22 @@ class OrderController:
     ).as_dict()
 
   @router.get("/{order_id}", response_model=OrderOut)
-  def read(order_id: int, user=Depends(Dependencies.get_current_user),
+  def read(order_id: int, user=Depends(Dependencies.get_any_user),
            db=Depends(Dependencies.get_db)):
     return OrderController._owned(db, order_id, user).as_dict()
 
   @router.post("/{order_id}/lines", response_model=OrderOut)
-  def add_line(order_id: int, body: OrderLineIn, user=Depends(Dependencies.get_current_user),
+  def add_line(order_id: int, body: OrderLineIn, user=Depends(Dependencies.get_any_user),
                db=Depends(Dependencies.get_db)):
     """Add a product to a draft order."""
     OrderController._owned(db, order_id, user)
     return OrderController._run(
-      OrderService.add_line, db, order_id, body.product_id, body.quantity, body.price
+      OrderService.add_line, db, order_id, body.product_id, body.quantity, body.price,
+      body.note,
     ).as_dict()
 
   @router.delete("/{order_id}/lines/{product_id}", response_model=OrderOut)
-  def remove_line(order_id: int, product_id: int, user=Depends(Dependencies.get_current_user),
+  def remove_line(order_id: int, product_id: int, user=Depends(Dependencies.get_any_user),
                   db=Depends(Dependencies.get_db)):
     """Remove a product from a draft order."""
     OrderController._owned(db, order_id, user)
@@ -69,7 +77,7 @@ class OrderController:
 
   @router.put("/{order_id}/lines/{product_id}/quantity", response_model=OrderOut)
   def set_quantity(order_id: int, product_id: int, body: OrderLineIn,
-                  user=Depends(Dependencies.get_current_user), db=Depends(Dependencies.get_db)):
+                  user=Depends(Dependencies.get_any_user), db=Depends(Dependencies.get_db)):
     """Set a draft order line's quantity."""
     OrderController._owned(db, order_id, user)
     return OrderController._run(
@@ -78,7 +86,7 @@ class OrderController:
 
   @router.put("/{order_id}/lines/{product_id}/price", response_model=OrderOut)
   def set_price(order_id: int, product_id: int, body: OrderLineIn,
-                user=Depends(Dependencies.get_current_user), db=Depends(Dependencies.get_db)):
+                user=Depends(Dependencies.get_any_user), db=Depends(Dependencies.get_db)):
     """Set a draft order line's price."""
     OrderController._owned(db, order_id, user)
     return OrderController._run(
@@ -87,7 +95,7 @@ class OrderController:
 
   @router.post("/{order_id}/checkout", response_model=dict)
   def checkout(order_id: int, body: OrderCheckoutIn | None = None,
-               user=Depends(Dependencies.get_current_user), db=Depends(Dependencies.get_db)):
+               user=Depends(Dependencies.get_any_user), db=Depends(Dependencies.get_db)):
     """Submit a draft order to the site: fill the cart, fill the form, submit.
 
     A successful submit confirms the order. Use `dry_run` to stage the cart

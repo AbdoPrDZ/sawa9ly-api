@@ -1,9 +1,16 @@
 """Order service: build a draft order locally, then post it to the site."""
 
+import logging
+
 from src.models import Client, Order, OrderLine, OrderState, Product
 from src.services.cart import Cart
 from src.services.product import Product as ProductPage
 from src.utils.livewire import Livewire, LivewireError
+
+#: The site's own order page, keyed by the id the site generated. Kept here so
+#: the one place that knows the shape of the site's URLs is the one place that
+#: has to know it.
+logger = logging.getLogger(__name__)
 
 
 class OrderError(Exception):
@@ -71,20 +78,38 @@ class OrderService:
     return Order.create(db, user.id, client_id=client_id, note=note)
 
   @staticmethod
-  def add_line(db, order_id, product_id, quantity=1, price=None):
-    """Add a product to a draft order, or top up an existing line."""
+  def add_line(db, order_id, product_id, quantity=1, price=None, note=None):
+    """Add a product to a draft order, or top up an existing line.
+
+    `note` follows the same rule as `price` on a line that already exists: it is
+    only written when given, so topping up a quantity cannot silently wipe the
+    reason it was there.
+
+    `origin_price` is snapshotted **only when the line is created**, from the
+    catalogue's price for that product at this moment. A top-up deliberately
+    leaves it alone: the line already records what the site charged the first
+    time, and a later price is a different fact. A product that is not in the
+    catalogue yet has no price to snapshot and gets a null, which is also what a
+    product showing "sur demande" gets — unknown, not zero.
+    """
     order = OrderService._editable(OrderService.get(db, order_id))
     product = Product.get_or_create(db, product_id)
 
     line = OrderLine.get(db, order.id, product.id)
 
     if line is None:
-      line = OrderLine(order_id=order.id, product_id=product.id, quantity=quantity, price=price)
+      line = OrderLine(
+        order_id=order.id, product_id=product.id,
+        quantity=quantity, price=price, note=note,
+        origin_price=product.numeric_price(),
+      )
       db.add(line)
     else:
       line.quantity += quantity
       if price is not None:
         line.price = price
+      if note is not None:
+        line.note = note
 
     db.commit()
 
@@ -215,10 +240,107 @@ class OrderService:
       return {'order': order.as_dict(), 'checkout': result, 'state': order.state}
 
     if result.get('success'):
-      order.reference = str(result.get('order') or '') or None
+      order.origin_id = OrderService._origin_id(result)
+      order.reference = OrderService._reference(result, order.origin_id)
       order.transition(db, OrderState.CONFIRMED)
 
+      if order.origin_id is None:
+        # Not a failure — the order really was placed, we just could not read
+        # its number. Say so, because an order with no id is one the site cannot
+        # be asked about later.
+        logger.warning(
+          "checkout for %s: placed, but no order id in the response (order=%r)",
+          username, result.get('order'),
+        )
+      else:
+        logger.info(
+          "checkout for %s: placed as order %s (reference %r)",
+          username, order.origin_id, order.reference,
+        )
+
     return {'order': order.as_dict(), 'checkout': result, 'state': order.state}
+
+  @staticmethod
+  def _origin_id(result):
+    """The order number the website generated, or None.
+
+    The site does not return a bare number. Its `order` value is a PHP array
+    carrying a serialised Eloquent model, which arrives as
+    `[None, {'class': 'App\\\\Models\\\\Order', 'key': 879988, 's': 'mdl'}]` — the
+    id is the `key` of the model in it.
+
+    So the shape is searched rather than assumed: a number, a string of digits,
+    a mapping, or a sequence holding one. Every plausible arrangement is handled
+    and anything else is None.
+
+    None is always better than a wrong id. A wrong one would be believed, stored,
+    and used to ask the site about an order that is not this one.
+    """
+    value = result.get('order')
+
+    if value is None or isinstance(value, bool):
+      return None
+
+    if isinstance(value, int):
+      return value
+
+    if isinstance(value, str):
+      text = value.strip()
+      return int(text) if text.isdigit() else None
+
+    if isinstance(value, dict):
+      return OrderService._id_in(value)
+
+    if isinstance(value, (list, tuple)):
+      for element in value:
+        found = OrderService._id_in(element) if isinstance(element, dict) else (
+          element if isinstance(element, int) and not isinstance(element, bool) else None
+        )
+        if found is not None:
+          return found
+
+    return None
+
+  @staticmethod
+  def _id_in(model):
+    """The id inside a serialised Eloquent model, or None.
+
+    `key` is what the site puts the primary key in. `id` and `order_id` are here
+    for a site that sends something plainer, and cost nothing to try.
+    """
+    for key in ("key", "id", "order_id"):
+      candidate = model.get(key)
+
+      if isinstance(candidate, bool):
+        continue
+
+      if isinstance(candidate, int):
+        return candidate
+
+      if isinstance(candidate, str) and candidate.strip().isdigit():
+        return int(candidate.strip())
+
+    return None
+
+  @staticmethod
+  def _reference(result, origin_id):
+    """The human-readable reference, when the site gave one worth keeping.
+
+    Only a plain scalar is stored. The site normally returns the serialised model
+    described above, and stringifying that produced a Python repr of a PHP array
+    in a field meant to hold a reference — noise that read like a bug. When there
+    is no clean scalar the id lives in `origin_id` and this stays null, which is
+    the honest answer rather than a blob.
+    """
+    value = result.get('order')
+
+    if isinstance(value, str) and value.strip():
+      return value.strip()[:128]
+
+    if isinstance(value, int) and not isinstance(value, bool):
+      return str(value)
+
+    return str(origin_id) if origin_id is not None else None
 
   @staticmethod
   def _sync_cart(cart, order):

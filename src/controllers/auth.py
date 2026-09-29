@@ -3,7 +3,7 @@
 Profile routes are available to *any* signed-in user, whatever their role,
 because a user must be able to fix their own password and their own sawa9ly
 credentials without an administrator involved. Editing somebody else's account
-is not here — that is `/admin`, and it is super-only.
+is not here — that is `/api/admin`, and it is super-only.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status

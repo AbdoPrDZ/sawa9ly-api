@@ -2,7 +2,11 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { Spinner } from './components/Spinner'
 import { TopBar } from './components/TopBar'
 import { ApiKeys } from './pages/ApiKeys'
+import { Clients } from './pages/Clients'
 import { Login } from './pages/Login'
+import { OrderDetail } from './pages/OrderDetail'
+import { Orders } from './pages/Orders'
+import { Pages } from './pages/Pages'
 import { ProductDetail } from './pages/ProductDetail'
 import { Products } from './pages/Products'
 import { ProfilePage } from './pages/Profile'
@@ -39,6 +43,10 @@ export function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/products" element={<Products />} />
           <Route path="/products/:productId" element={<ProductDetail />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/orders/:orderId" element={<OrderDetail />} />
+          <Route path="/clients" element={<Clients />} />
+          <Route path="/pages" element={<Pages />} />
           <Route
             path="/users"
             element={user.is_admin ? <Users /> : <Navigate to="/profile" replace />}

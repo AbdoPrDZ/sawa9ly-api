@@ -8,9 +8,9 @@ include LICENSE
 include src/version.py
 
 # The dashboard's build output is not part of the distribution. The API serves
-# public/dist when it exists and skips the dashboard when it does not, so an
+# dashboard/dist when it exists and skips the dashboard when it does not, so an
 # sdist without it is a working API-only install.
-prune public
+prune dashboard
 prune data
 prune .venv
 prune .agents

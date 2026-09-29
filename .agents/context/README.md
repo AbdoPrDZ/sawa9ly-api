@@ -38,7 +38,7 @@ that the site owns (carts, sessions) is mirrored locally in SQLite so an order
 can be prepared and reviewed before anything is submitted. Two front ends — an
 `argparse` CLI and a FastAPI server — sit on one service layer, and both are
 multi-user: every user has their own sawa9ly session and therefore their own
-cart. An admin dashboard in `public/` manages users, roles and API keys.
+cart. An admin dashboard in `dashboard/` manages users, roles and API keys.
 
 ## Current state
 

@@ -27,9 +27,11 @@ class Config:
   PROJECT_ROOT = Path(__file__).resolve().parents[1]
   DATA_DIR = PROJECT_ROOT / "data"
 
-  # There is deliberately no default-user setting. A command acts for the user
-  # it is given, and the caller must say which: guessing an account means
-  # operating on somebody's cart without anybody asking for it.
+  # There is no default-user *setting*. `--user` is optional and falls back to
+  # the super admin, but that account is read from the database rather than
+  # configured here, so nothing in the environment can quietly redirect a command
+  # onto an account nobody named. See `Cli.super_username` for why an ambiguous
+  # installation is refused rather than guessed at.
 
   # --- database -------------------------------------------------------
 

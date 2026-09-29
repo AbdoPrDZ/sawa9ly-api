@@ -13,11 +13,18 @@ from cli.client import ClientCli
 from cli.cron import CronCli
 from cli.order import OrderCli
 from cli.output import Output
+from cli.page import PageCli
 from cli.product import ProductCli
 from cli.router import RouterCli
 from cli.serve import ServeCli
 from cli.track import TrackCli
-from src.services import AccountsError, CronError, OrderError, TrackingError
+from src.services import (
+  AccountsError,
+  CronError,
+  OrderError,
+  PageError,
+  TrackingError,
+)
 from src.utils.livewire import LivewireError
 
 # Refusals the CLI reports as `error: ...` with a non-zero exit, rather than
@@ -28,7 +35,9 @@ from src.utils.livewire import LivewireError
 # its route table — hits the super-account guard on a checkout that has neither a
 # super nor the environment to make one, and that is a setup step to report, not
 # a crash to dump a traceback over.
-EXPECTED_ERRORS = (LivewireError, OrderError, TrackingError, CronError, AccountsError)
+EXPECTED_ERRORS = (
+  LivewireError, OrderError, PageError, TrackingError, CronError, AccountsError,
+)
 
 
 class App:
@@ -39,6 +48,7 @@ class App:
     CatalogueCli,
     ClientCli,
     OrderCli,
+    PageCli,
     AccountCli,
     TrackCli,
     CronCli,
@@ -60,6 +70,15 @@ class App:
 
   @staticmethod
   def run(args):
+    from cli.base import Cli
+
+    # `--user` is optional and falls back to the super admin. Resolved once, here,
+    # so every group below receives a concrete account name and none of them has to
+    # know the fallback exists. Only commands that declare `--user` have the
+    # attribute; `user add <name>` and friends use `username` and are left alone.
+    if hasattr(args, 'user') and not args.user:
+      args.user = Cli.super_username()
+
     for group in App.GROUPS:
       dispatch = getattr(group, 'dispatch', None)
 
@@ -77,11 +96,11 @@ class App:
   def _handles(group, command):
     """Whether this group owns the given command name."""
     names = {
-      'ProductCli': {'cart', 'login', 'product', 'cart-add', 'cart-remove',
-                     'cart-set-quantity', 'cart-set-price', 'cart-remove-item', 'checkout'},
+      'ProductCli': {'cart', 'login', 'product', 'checkout'},
       'CatalogueCli': {'catalogue'},
       'ClientCli': {'client'},
       'OrderCli': {'order'},
+      'PageCli': {'page'},
       'AccountCli': {'user', 'apikey'},
       'TrackCli': {'track'},
       'CronCli': {'cron'},

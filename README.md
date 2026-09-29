@@ -98,7 +98,7 @@ so:
 
 - the database is created at `site-packages/data/sawa9ly.db` — a **separate,
   empty** database, not the one your checkout uses;
-- the dashboard is not served, because `public/dist` is not part of the
+- the dashboard is not served, because `dashboard/dist` is not part of the
   distribution, so `/` returns 404 while the API routes still work;
 - `serve` needs `SUPER_ADMIN_USERNAME` and `SUPER_ADMIN_PASSWORD` set, or an
   existing super in that separate database, or it refuses to start.
@@ -108,20 +108,32 @@ your real users, keys, orders or cart wants a clone and `python main.py`.
 Pointing an install at a specific data directory is a change to `Config` in
 `src/config.py`.
 
-### There is no default user
+### The default user is the super admin
 
-Every command that acts for an account requires `--user`, and there is no
-fallback:
+`--user` is optional. A command that acts for an account and was not told which
+one falls back to the `super`:
 
 ```bash
-python main.py cart --user alice
-python main.py product 5663 --user alice
-python main.py order list --user alice
+python main.py cart show                    # acts as the super
+python main.py cart show --user alice       # acts as alice
+python main.py order list
 ```
 
+The super is read from the **database**, not from the environment, so nothing in
+`.env` can quietly point a command at an account nobody named. It is found by
+`Cli.super_username()` in `cli/base.py`:
+
+- one super → that one is used;
+- several, and `SUPER_ADMIN_USERNAME` names one of them → that one is used;
+- several, and it names none of them → the CLI lists them and exits, rather than
+  picking one at random. Pass `--user` to be explicit;
+- none at all → it says how to create one.
+
 Commands that need no account — `user list`, `catalogue show`, `serve` — do not
-take one. A default would mean a command run without arguments silently
-operating on somebody's cart.
+take one.
+
+`--user` is resolved once in `App.run` before dispatch, so no command group knows
+the fallback exists and every one of them receives a concrete account name.
 
 ### How the session is kept
 
@@ -166,7 +178,10 @@ cli/                        one module per command group
   catalogue.py              saved product info
   client.py                 delivery recipients
   order.py                  orders
+  page.py                   landing pages
   account.py                users and API keys
+  track.py                  product watches
+  cron.py                   the scheduled queue
   serve.py                  runs the HTTP API
 src/
   __init__.py
@@ -188,20 +203,29 @@ src/
     client.py               Client: delivery recipient
     order.py                Order + OrderState
     order_line.py           OrderLine: one product on an order
+    landing_page.py         LandingPage + PageState: a user page per product
     secret.py               Secret: app-wide secrets (token signing key)
   services/
     __init__.py
     product.py              Product page service
     cart.py                 Cart page service
     order.py                OrderService: draft editing and checkout
+    order_page.py           OrderPage: reads the site's own order page
+    landing_page.py         LandingPageService: create, edit, move state
+    tracking.py             Tracking: watches and the product scan
+    order_sync.py           OrderSync: reconciles order state against the site
+    cron.py                 Cron: the queue's timing, locking and reporting
   controllers/
     __init__.py
     dependencies.py         request plumbing (Dependencies)
-    products.py, cart.py, checkout.py, catalogue.py, client.py, order.py
+    products.py, cart.py, checkout.py, catalogue.py, client.py, order.py,
+    page.py, trackers.py
+    public_page.py          a published landing page, for anyone
     auth.py                 dashboard sign-in
     admin_users.py          admin: users
     admin_keys.py           admin: API keys
-public/                     admin dashboard (React + Vite); only dist/ is served
+    admin_orders.py         admin: every user's orders (super only)
+dashboard/                 admin dashboard (React + Vite); only dist/ is served
 data/                       SQLite database (gitignored)
 AGENTS.md                   project conventions
 ```
@@ -228,23 +252,31 @@ python main.py --json cart
 
 | Command | Description |
 | --- | --- |
-| `cart` | Show the cart: quantities, prices, count, total |
+| `cart show` | Show the cart: quantities, prices, count, total |
+| `cart add <id>` | Add a product to the cart |
+| `cart remove <id>` | Remove a product from the cart (product page) |
+| `cart set-quantity <id> <qty>` | Set a cart line quantity (persisted) |
+| `cart set-price <id> <price>` | Set a cart line unit price (does not persist) |
+| `cart remove-item <id>` | Remove a cart line (cart page) |
 | `login` | Log in now, refresh the stored session, and print the cookie |
 | `product <id>` | Scrape a product page |
-| `cart-add <id>` | Add a product to the cart |
-| `cart-remove <id>` | Remove a product from the cart (product page) |
-| `cart-set-quantity <id> <qty>` | Set a cart line quantity (persisted) |
-| `cart-set-price <id> <price>` | Set a cart line unit price (does not persist) |
-| `cart-remove-item <id>` | Remove a cart line (cart page) |
 | `checkout` | Set quantities/prices, fill the form and submit |
 
-All of these take `--user`, and the product id is required — there is no default
-for either.
+The cart's operations are nested under `cart` rather than spelled out as
+`cart-add`, `cart-remove` and so on: a set of flat names that all start with the
+same word is one namespace pretending to be six. This is the same shape every
+other resource here uses — `order`, `client`, `page`, `catalogue`.
+
+All of these take `--user` — optional, defaulting to the super admin as described
+above — and the product id is required, with no default for it.
 
 ```bash
 python main.py product 5663 --user alice
-python main.py cart-add 5663 --user alice
-python main.py cart --user alice
+python main.py cart add 5663 --user alice
+python main.py cart set-quantity 5663 2 --user alice
+python main.py cart set-price 5663 16000 --user alice
+python main.py cart show --user alice
+python main.py cart remove-item 5663 --user alice
 
 # Checkout, staging only (never submits):
 python main.py checkout --user alice --dry-run --prices '{"5663": 16000, "5724": 5000}'
@@ -263,17 +295,20 @@ python main.py checkout --user alice \
 | `catalogue save [id]` | Scrape a product and store its info |
 | `catalogue show <id>` | Show a saved product |
 | `catalogue list` | List saved products |
-| `client add <name> [--phone …]` | Add or update a delivery recipient |
-| `client list` | List clients |
-| `order create [--client <id>]` | Start a draft order |
+| `client add <name> --user <u> [--phone …]` | Add or update a delivery recipient |
+| `client list --user <u>` | List a user's clients |
+| `order create --user <u> [--client <id>]` | Start a draft order |
 | `order add <order> <product> [--quantity] [--price]` | Add a product to a draft |
 | `order remove <order> <product>` | Remove a product from a draft |
 | `order set-quantity <order> <product> <qty>` | Set a draft line's quantity |
 | `order set-price <order> <product> <price>` | Set a draft line's price |
-| `order checkout <order> [--dry-run]` | Submit a draft order to the site |
+| `order checkout <order> --user <u> [--dry-run]` | Submit a draft order to the site |
 | `order state <order> <state>` | Move to `confirmed` or `done` |
-| `order list [--state]` | List orders |
+| `order list --user <u> [--state]` | List a user's orders |
 | `order show <order>` | Show an order and its lines |
+| `page create <product> <title> --user <u>` | Start a draft landing page |
+| `page list --user <u> [--product] [--state]` | List a user's landing pages |
+| `page show/edit/state <page>` | Read a page, change it, move it |
 | `user add/list/delete` | Manage users |
 | `user set-role <name> <role>` | Make a user an `admin` (or back to `user`) |
 | `user set-login-password <name> [pw]` | Set or clear a dashboard password |
@@ -282,12 +317,17 @@ python main.py checkout --user alice \
 | `cron run/listen/status` | The scheduled tracking queue |
 | `serve [--host] [--port] [--reload]` | Run the HTTP API and dashboard |
 
+`--user` is **required** on `order create`, `order list` and `order checkout`, and on
+the `client` commands, because those are the ones that have to say whose account
+they are creating something in. It is **not** accepted by the line commands at
+all, because an order already knows its owner — see [Orders](#orders) for a full
+walkthrough. Everywhere else it may be omitted and falls back to the super admin.
+
 ```bash
 python main.py catalogue save 5663 --user alice
 python main.py client add "Jane Doe" --user alice --phone 0555000000 --adresse "1 Rue ..." --wilaya-id 16 --commune-id 1
 python main.py order create --user alice --client 1
 python main.py order add 1 5663 --quantity 2 --price 16000
-python main.py order add 1 5724 --price 5000
 python main.py order show 1
 python main.py order checkout 1 --user alice --dry-run   # stages, does not order
 ```
@@ -338,14 +378,221 @@ touch the website when you submit.
 
 States are `draft` → `confirmed` → `done`, and **only a draft can be edited**.
 
+#### A worked example
+
+Everything below is one order, start to finish. Replace `alice` with your user and
+the ids with your own.
+
+```bash
+# 1. A delivery recipient. Needed before checkout, not before editing.
+python main.py client add "Jane Doe" --user alice \
+  --phone 0555000000 --adresse "1 Rue Exemple" --wilaya-id 16 --commune-id 1
+
+# 2. Start a draft. Note the "id" it prints — every later command needs it.
+python main.py order create --user alice --client 1
+
+# 3. Add lines. The ORDER id comes first, the product id second.
+python main.py order add 1 5663 --quantity 2 --price 16000
+python main.py order add 1 5724 --price 5000
+
+# 4. Edit a line, or drop it.
+python main.py order set-quantity 1 5663 3
+python main.py order set-price    1 5663 15000
+python main.py order remove       1 5724
+
+# 5. Look before you leap.
+python main.py order show 1
+python main.py order list --user alice
+
+# 6. Stage it on the site WITHOUT ordering anything.
+python main.py order checkout 1 --user alice --dry-run
+
+# 7. Only when you mean it: drop --dry-run. This places a real order.
+python main.py order checkout 1 --user alice
+
+# 8. Later, once it is confirmed, close the order off by hand.
+python main.py order state 1 done
+```
+
+#### Things that will bite you
+
+- **The order id comes first.** `order add <order> <product>`, not the other way
+  round. This is the single most common mistake.
+- **The line commands take no `--user`.** An order already knows its owner, so
+  `order add`, `remove`, `set-quantity`, `set-price` and `state` reject the flag.
+  `--user` belongs to `order create`, `order list` and `order checkout`.
+- **A product appears at most once in an order.** Re-running `order add` on a
+  product already in the order **tops up** its quantity instead of adding a second
+  line. Use `set-quantity` when you mean to replace it.
+- **Each line records the product's own price as it was when the line was
+  created**, in `origin_price`, parsed from the site's display text so that
+  `'14,500 دج'` becomes `14500`. It is a snapshot, so a later price change on the
+  site cannot rewrite the margin an order was built at. It is set once and never
+  refreshed, not even by a top-up. It is null when the product was not in the
+  catalogue yet, or when its price carries no number at all - "sur demande" for
+  instance. Null means unknown, not zero.
+- **`<product>` is the sawa9ly product id** — the same one the catalogue uses and
+  the one the site knows — not an internal row number. A product that is not in
+  the catalogue yet gets an empty row created for it (`title` and `price` null)
+  so the line can exist; run `catalogue save <id>` to fill in its details.
+- **`checkout` needs a client.** An order with no recipient is refused, so create
+  the client first or pass `--client` to `order create`.
+- **Always set a price.** A line with no price contributes nothing, and the site
+  has a 5% commission floor, so a checkout that only sets quantities stalls at
+  step 1. `set-price` and `set-quantity` refuse anything below 1.
+- **Only a draft is editable.** After a successful checkout the order is
+  `confirmed` and every line command is refused. Over HTTP that is a 409; from
+  the CLI it raises `OrderError`.
+- **A real checkout cannot be undone from here.** Nothing in this project cancels
+  an order once the site has it. Use `--dry-run` while you are learning the flow;
+  it stops after staging the cart, but it does still write to the live cart, so
+  put the quantities back afterwards.
+- **The state machine is forward-only:** `draft` → `confirmed` → `done`, one step
+  at a time, plus `draft` → `cancelled` and `confirmed` → `cancelled`. `order
+  state` will not skip ahead or go backwards; asking for the state an order is
+  already in is a no-op. `cancelled` is terminal, and a `done` order **cannot** be
+  cancelled — an order that has run its course is finished rather than called off.
+  Restoring a cancelled order means composing a new one, so the history stays
+  honest.
+
+#### Checking out
+
 `order checkout` mirrors the site's own flow: it makes the site's cart match the
 order exactly (removing anything the order does not want, adding the rest at
 their quantities), fills the checkout form from the order's client, and
-submits. A successful submit moves the order to `confirmed` and records the
-website's reference. Use `--dry-run` to do everything except the submit.
+submits. A successful submit moves the order to `confirmed` and records two
+things the site hands back: `reference`, and `origin_id`, the order number the
+site generated (`879988`, say). `origin_id` is what makes the order
+addressable afterwards — it is the `id` in the site's own
+`/order/{origin_id}` page, which is where its current state and its lines can be
+read. Use `--dry-run` to do everything except the submit. The checkout flags take
+JSON objects. In PowerShell wrap them in single quotes so the inner double
+quotes survive.
 
-The checkout flags take JSON objects. In PowerShell wrap them in single quotes
-so the inner double quotes survive.
+### Landing pages
+
+A landing page is **one user's writing about one product**. Users do not see each
+other's pages, and a single user may keep as many pages for the same product as
+they like — a seasonal offer, a second language, a variant.
+
+| Field | Meaning |
+| --- | --- |
+| `id` | the page's own key — **never** used in a public URL |
+| `user_id` | whose page it is; pages cascade away with the user |
+| `product_id` | our own `products.id`, which is what the page is stored against |
+| `public_id` | the opaque token the page is served under |
+| `title` | what the page is called in the list |
+| `html` | the markup, stored exactly as written |
+| `state` | `draft`, `publish` or `archive` |
+
+The state is a label for the page, and it decides exactly one thing: **only
+`publish` is served.** A `draft` or an `archive` 404s at its public address, and
+so does a token that matches nothing — the three are indistinguishable, so an
+unpublished page's URL leaks nothing, not even that it exists.
+
+## Publishing a page
+
+A published page is served at **`/pages/{public_id}`**:
+
+```text
+http://127.0.0.1:8000/pages/7d_3zlLqxz0DZ6k2RiaKzg
+```
+
+```bash
+python main.py page create 5663 "Summer offer" --html "<h1>Summer</h1>" --user alice
+python main.py page list --user alice
+python main.py page state 1 publish      # now it is served
+```
+
+`public_id` is 22 URL-safe characters of randomness, unique across **every**
+user's pages, and unrelated to the row `id` — which is ours and enumerable, so it
+must never appear in a public address. The dashboard shows the full link on the
+**Pages** list and in the edit dialog, and only makes it clickable once the page
+is published.
+
+Note the two things called "pages", which are deliberately different resources
+behind different credentials:
+
+| Path | What it is |
+| --- | --- |
+| `/pages/{public_id}` | the **public** page, as HTML, for anyone with the link. No sign-in. |
+| `/api/v1/pages`, `/api/v1/pages/{id}` | the signed-in user's **own** pages, as JSON. Dashboard token or API key. |
+
+The public route is a catch-all registered **last**, so a request for an API
+route, a dashboard route or `/docs` is matched before it ever gets there.
+`/pages` with no id is a 404, and the app's own Pages page lives at
+`/dashboard/pages`, so the two cannot collide.
+
+In development, `npm run dev` proxies `/pages` to the API along with `/api`. That
+matters: the link the dashboard shows is built from `window.location.origin`, so
+in dev that is port 5173, and Vite would otherwise refuse it with a "public base
+URL" error. With the proxy, a published page is reachable on `localhost:5173` and
+on `localhost:8000` alike, so dev behaves like production. **Restart
+`npm run dev` after changing `vite.config.ts`.**
+
+A public address that serves no page answers **404 with a plain page**, not the
+API's JSON: these URLs are followed by people, not clients. That covers a page
+that was never published, one that has been archived, one whose token is wrong
+and the bare /pages — all four look the same, so an unpublished page leaks
+nothing, not even that it exists. The root / does the same and points at the
+dashboard. Anything under /api still answers JSON, because that is what its
+callers parse.
+
+### The sandbox header, and why it is not decoration
+
+The dashboard and the published pages share an origin, and the dashboard keeps
+its session token in `localStorage`. So a served page is sent with:
+
+```text
+Content-Security-Policy: sandbox
+X-Content-Type-Options: nosniff
+Cache-Control: no-cache
+```
+
+Without `sandbox`, any script in a published page runs on that same origin and
+can read that token — so a page an administrator visited would hand over their
+session. `sandbox` gives the page a unique, opaque origin with no script
+execution: HTML and CSS render as written, and the dashboard's origin is
+unreachable from the page.
+
+**The cost is that a page cannot run its own JavaScript.** If you need that, the
+fix is to serve pages from a *different origin* — a second port or host is a real
+origin boundary — not to loosen the header. Do not add `allow-scripts` while
+pages and the dashboard share an origin.
+
+**Two product ids, as everywhere.** You *create* a page by the **sawa9ly**
+product id, because that is the id you have. It is stored against our own
+`products.id`, and `PageOut` returns both — `product_id` (ours) and
+`sawa9ly_product_id` (the site's) — so nothing downstream has to guess.
+
+```bash
+python main.py page create 5663 "Summer offer" --html "<h1>Summer</h1>" --user alice
+python main.py page create 5663 "Winter offer" --user alice      # a second page, same product
+python main.py page list --user alice
+python main.py page list --user alice --product 5663
+python main.py page list --user alice --state publish
+python main.py page edit 1 --html "<h1>Summer sale</h1>"          # markup only
+python main.py page state 1 publish
+python main.py page show 1
+```
+
+From the dashboard: **Pages**, available to every signed-in user, lists and edits
+yours and creates new ones. A product that is not in the catalogue yet is fine —
+the row is created for it, the same as when you add one to an order.
+
+**The markup is stored verbatim.** See [Publishing a page](#publishing-a-page)
+for how it is served and why the response is sandboxed.
+
+### Clients and pages are yours alone
+
+`/api/v1/clients` and `/api/v1/pages` are scoped to the caller, and there is no
+admin or super-wide view of either. A `super` asking for another user's page gets
+the same 404 as anyone else. The only cross-user order view in the project is
+`/api/admin/orders`, which is super-only on purpose.
+
+Neither resource has a delete. A client is corrected by saving the same name
+again, and a page is corrected by editing it, but neither can be removed from the
+UI — add a `DELETE` route and a control if you want that.
 
 ## Python API
 
@@ -457,10 +704,11 @@ python main.py serve --port 8000                             # or: uvicorn src.s
 ```
 
 Interactive docs are at http://127.0.0.1:8000/docs. Machine routes need an API
-key; `/auth` and `/admin` need a dashboard token instead.
+key; `/api/auth` and `/api/admin` need a dashboard token instead. `/api/v1/orders` and
+`/api/v1/trackers` take either, because the dashboard reads them too.
 
 ```bash
-curl -H "X-API-Key: sk_..." http://127.0.0.1:8000/v1/cart
+curl -H "X-API-Key: sk_..." http://127.0.0.1:8000/api/v1/cart
 ```
 
 The key identifies the user, and every request uses that user's own sawa9ly
@@ -468,76 +716,81 @@ session and cart, so two keys never interfere.
 
 ### Versioning
 
-The **machine-facing** routes sit under **`/v1`**:
+The **machine-facing** routes sit under **`/api/v1`**:
 
 | Route | Description |
 | --- | --- |
-| `GET /v1/products/{id}` | Scrape a product page |
-| `POST /v1/products/{id}/cart` | Add to cart |
-| `DELETE /v1/products/{id}/cart` | Remove from cart |
-| `GET /v1/cart` | The cart |
-| `PUT /v1/cart/items/{id}/quantity` | Set a quantity |
-| `PUT /v1/cart/items/{id}/price` | Set a unit price |
-| `DELETE /v1/cart/items/{id}` | Remove a line |
-| `POST /v1/checkout` | Set quantities/prices, fill the form, submit |
-| `GET /v1/catalogue`, `GET /v1/catalogue/{id}`, `POST /v1/catalogue/{id}` | Saved product info |
-| `GET/POST /v1/clients`, `GET /v1/clients/{id}` | Delivery recipients |
-| `GET/POST /v1/orders`, `GET /v1/orders/{id}` | Orders |
-| `POST /v1/orders/{id}/lines` | Add a product to a draft |
-| `PUT/DELETE /v1/orders/{id}/lines/{product}` | Edit or remove a line |
-| `POST /v1/orders/{id}/checkout` | Submit a draft order |
-| `GET/POST /v1/trackers`, `DELETE /v1/trackers` | Watched products for change tracking |
+| `GET /api/v1/products/{id}` | Scrape a product page |
+| `POST /api/v1/products/{id}/cart` | Add to cart |
+| `DELETE /api/v1/products/{id}/cart` | Remove from cart |
+| `GET /api/v1/cart` | The cart |
+| `PUT /api/v1/cart/items/{id}/quantity` | Set a quantity |
+| `PUT /api/v1/cart/items/{id}/price` | Set a unit price |
+| `DELETE /api/v1/cart/items/{id}` | Remove a line |
+| `POST /api/v1/checkout` | Set quantities/prices, fill the form, submit |
+| `GET /api/v1/catalogue`, `GET /api/v1/catalogue/{id}`, `POST /api/v1/catalogue/{id}` | Saved product info |
+| `GET/POST /api/v1/clients`, `GET /api/v1/clients/{id}` | Delivery recipients |
+| `GET/POST /api/v1/pages`, `GET/PATCH /api/v1/pages/{id}` | Landing pages, one per user |
+| `GET/POST /api/v1/orders`, `GET /api/v1/orders/{id}` | Orders |
+| `POST /api/v1/orders/{id}/lines` | Add a product to a draft |
+| `PUT/DELETE /api/v1/orders/{id}/lines/{product}` | Edit or remove a line |
+| `POST /api/v1/orders/{id}/checkout` | Submit a draft order |
+| `GET/POST /api/v1/trackers`, `DELETE /api/v1/trackers` | Watched products for change tracking |
 
 The prefix is the version of the **wire format**, not of the application, and the
 two move independently — a bug fix can ship as 1.3.1 while the contract is still
-`/v1`. A future `/v2` is added alongside `/v1`, never in place of it.
+`/api/v1`. A future `/v2` is added alongside `/api/v1`, never in place of it.
 
 **Three groups are deliberately unversioned**, because nothing outside this
 project consumes them:
 
 | Route | Description | Why no version |
 | --- | --- | --- |
-| `GET /health` | Liveness, no auth | A load balancer or container health check is configured against a fixed path; versioning it breaks those silently |
-| `GET /me` | The user the key belongs to | Meta route, not part of the resource contract |
-| `/auth/*`, `/admin/*` | The dashboard's own API | The dashboard in `public/` is the only caller, so there is no second consumer to keep compatible |
+| `GET /api/health` | Liveness, no auth | A load balancer or container health check is configured against a fixed path; versioning it breaks those silently |
+| `GET /api/me` | The user the key belongs to | Meta route, not part of the resource contract |
+| `/api/auth/*`, `/api/admin/*` | The dashboard's own API | The dashboard in `dashboard/` is the only caller, so there is no second consumer to keep compatible |
 
-The admin routes need `Authorization: Bearer <token>` from `POST /auth/login`
+The admin routes need `Authorization: Bearer <token>` from `POST /api/auth/login`
 with an admin's username and password:
 
 | Route | Description |
 | --- | --- |
-| `POST /auth/login` | Exchange username + password for a token (12h) |
-| `GET /auth/me` | The signed-in user |
-| `GET/PATCH /auth/me/profile` | Your own profile, any role |
-| `POST /auth/me/sawa9ly-login` | Refresh your sawa9ly session |
-| `GET/POST /admin/users` | List or create users |
-| `PATCH/DELETE /admin/users/{id}` | Edit or delete a user |
-| `GET /admin/api-keys` | Every key, every user |
-| `POST /admin/users/{id}/api-keys` | Issue a key; plaintext in the response only |
-| `DELETE /admin/api-keys/{id}` | Revoke a key |
+| `POST /api/auth/login` | Exchange username + password for a token (12h) |
+| `GET /api/auth/me` | The signed-in user |
+| `GET/PATCH /api/auth/me/profile` | Your own profile, any role |
+| `POST /api/auth/me/sawa9ly-login` | Refresh your sawa9ly session |
+| `GET/POST /api/admin/users` | List or create users |
+| `PATCH/DELETE /api/admin/users/{id}` | Edit or delete a user |
+| `GET /api/admin/api-keys` | Every key, every user |
+| `POST /api/admin/users/{id}/api-keys` | Issue a key; plaintext in the response only |
+| `DELETE /api/admin/api-keys/{id}` | Revoke a key |
+| `GET /api/admin/orders` | **Super only.** Every user's orders, not filtered by user |
+| `GET /api/admin/orders/{id}` | **Super only.** One order, whoever owns it |
 
 A valid token for a non-admin gets 403, not 401, so a client can tell "sign in"
-from "not allowed".
+from "not allowed". `/api/admin/orders` asks for the `super` role specifically, so an
+`admin` gets 403 there too — it is the one route that crosses user boundaries.
 
 ## Admin dashboard
 
-A React app served by the API at the site root. It manages products, users, API
-keys and your own account — orders and the cart are still driven from the CLI or
-the API.
+A React app served by the API at **`/dashboard/`**. It manages products, users,
+API keys and your own account, and shows your own orders read-only. Building and
+placing an order is still done from the CLI or the API, because a checkout places
+a real order on the site.
 
 ```bash
-cd public
+cd dashboard
 npm install
-npm run build          # writes public/dist, which the API serves
+npm run build          # writes dashboard/dist, which the API serves
 ```
 
-Then open http://127.0.0.1:8000/ and sign in with a username and dashboard
+Then open http://127.0.0.1:8000/dashboard/ and sign in with a username and dashboard
 password.
 
 There is no Node at runtime: the build is static files, so the only process is
-the API. `npm run dev` runs Vite on port 5173 and proxies `/v1`, `/auth` and
-`/admin` (plus the unversioned `/health` and `/me`) to port 8000 for front-end
-work.
+the API. `npm run dev` runs Vite on port 5173 and proxies `/api` to port 8000 for
+front-end work. In dev the app is at http://127.0.0.1:5173/dashboard/ , with the
+same prefix it has in production.
 
 **Restart both processes after changing routes or the proxy config.** Neither
 picks those up on its own: routes are registered when `create_app()` runs at
@@ -635,10 +888,38 @@ python main.py cron run                        # one pass
 python main.py cron listen                     # loop forever
 ```
 
+A pass runs two jobs, and both are reported:
+
+| Job | What it does |
+| --- | --- |
+| `tracking` | refreshes watched products, stamps the trackers that cared |
+| `orders` | re-reads each posted order's own page and reconciles our state |
+
 Each product is fetched using the first of the people watching it who has
 sawa9ly credentials, so it is checked on behalf of someone who wanted it checked.
 Clients are reused within a pass, so a hundred products watched by three people
 costs at most three logins.
+
+#### The orders job
+
+For every order that has an `origin_id` and is not already `done` or
+`cancelled`, the pass reads the site's own page for it
+(`src/services/order_page.py`) and moves our state to match. So an order you
+cancelled on the site becomes `cancelled` here, and nobody has to retype it.
+
+Two deliberate limits, both because `cancelled` is terminal and a wrong read
+could not be undone by running the pass again:
+
+- **Only `cancelled` is applied.** It is the one state the site has actually been
+  seen to report. Any other wording is left alone and reported as a *disagreement*
+  in the pass summary, rather than guessed at from a translation.
+- **A refused move is reported, not forced.** If the site says `cancelled` but
+  ours is `done`, the state machine forbids the move, so the summary says so and
+  the order stays put.
+
+An order with no `origin_id` is skipped — there is no page to read. That includes
+any order placed before the id was recorded, which therefore needs the id filling
+in by hand.
 
 `cron status` shows `fetchable_targets` and an `unfetchable_targets` list, so a
 queue that would do nothing is visible before you run it rather than from a pass
@@ -670,7 +951,7 @@ Two behaviours worth knowing:
 - **Only one pass runs at a time**, via a lock file in `data/`. A lock left by a
   hard kill is taken over after 15 minutes.
 
-`/v1/trackers` mirrors the CLI over HTTP and accepts either an API key or a
+`/api/v1/trackers` mirrors the CLI over HTTP and accepts either an API key or a
 dashboard token. There is deliberately no route that triggers a pass — one web
 request fanning out into hundreds of requests to the site is the fastest way to
 get blocked.
@@ -742,7 +1023,7 @@ These were established by probing the live site, and they drive the design:
 - **Quantities are server-side; prices are not.** A price only ever lives in
   the Livewire snapshot, so it is gone after any reload. That is why `checkout`
   takes prices and applies them on the way to `submit`, instead of expecting
-  `cart-set-price` to stick.
+  `cart set-price` to stick.
 - **The order reads quantities from the cart and prices from the component
   state.** Pushing `products_quantity.X` as an `updates` value changes the
   on-screen mirror but not the total — so quantities are applied through the
@@ -761,7 +1042,7 @@ These were established by probing the live site, and they drive the design:
 
 ## Caveats
 
-- `cart-set-price` and the price part of a cart update do not persist — the
+- `cart set-price` and the price part of a cart update do not persist — the
   value is only visible in the response for that request. Use `checkout`.
 - Quantities are applied server-side and **persist even if the checkout later
   fails**, so a rejected checkout can still leave quantities changed. Use

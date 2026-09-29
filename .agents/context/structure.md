@@ -31,7 +31,7 @@ this file; only a change in organisation does.
 | `database.md` | Engine setup, entity relationships, the rebuild-not-migrate policy, how sessions are persisted. |
 | `api.md` | The HTTP surface's shape and rules: the two credential systems, the CLI-mirroring rule, response contracts. |
 | `workflows.md` | Multi-step flows that cross layers: session bootstrap, cart mutation, checkout, order lifecycle. Points at domains for the rules. |
-| `dashboard.md` | The admin dashboard: the Vite project in `public/`, the build, how it is served, and the conventions its code follows. |
+| `dashboard.md` | The admin dashboard: the Vite project in `dashboard/`, the build, how it is served, and the conventions its code follows. |
 | `tracking.md` | Product change tracking and the cron queue: subscriptions, deduplication, the change log, scheduling and locking. |
 | `domains/README.md` | Index of the domains and when to read each. |
 | `domains/authentication.md` | API keys, dashboard passwords and tokens, roles, per-user sawa9ly sessions. |

@@ -17,14 +17,14 @@ class TrackCli:
 
     watch = actions.add_parser('watch', help="start watching a saved product")
     watch.add_argument('product_id')
-    watch.add_argument('--user', required=True, help="who is watching")
+    watch.add_argument('--user', help="who is watching; defaults to the super admin")
 
     unwatch = actions.add_parser('unwatch', help="stop watching a product")
     unwatch.add_argument('product_id')
-    unwatch.add_argument('--user', required=True, help="who is watching")
+    unwatch.add_argument('--user', help="who is watching; defaults to the super admin")
 
     listing = actions.add_parser('list', help="list what a user is watching")
-    listing.add_argument('--user', required=True, help="whose watches to list")
+    listing.add_argument('--user', help="whose watches to list; defaults to the super admin")
     listing.add_argument('--model', default=None, choices=list(TargetModel.ALL),
                          help="only one kind of target")
 

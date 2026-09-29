@@ -7,22 +7,48 @@ composed order can be reviewed before it becomes a real purchase.
 
 ```text
 draft ──▶ confirmed ──▶ done
+  │           │
+  └──▶ cancelled ◀┘
 ```
 
 | State | Meaning | Editable |
 | --- | --- | --- |
 | `draft` | being composed locally | yes |
-| `confirmed` | accepted by the site; its reference is recorded | no |
+| `confirmed` | accepted by the site; its `origin_id` and `reference` are recorded | no |
 | `done` | finished with | no |
+| `cancelled` | called off, from a draft or after posting | no |
 
-Transitions are forward-only and skip nothing. There is no path back to `draft`
-and no `draft → done`: a caller that wants to change a confirmed order composes a
-new one. The transition table lives on `OrderState` as data, and `can_transition`
-is the only thing that decides — do not scatter `if state ==` checks around the
-code, because they will disagree with each other.
+`cancelled` is terminal and reachable from both `draft` and `confirmed`, because a
+draft can be abandoned and a posted order can be called off. It is **not**
+reachable from `done`: an order that has run its course is finished rather than
+cancelled, and undoing that is an accounting question rather than a state change.
+
+Transitions are otherwise forward-only and skip nothing. There is no path back to
+`draft` and no `draft → done`: a caller that wants to change a confirmed order
+composes a new one. The transition table lives on `OrderState` as data, and
+`can_transition` is the only thing that decides — do not scatter `if state ==`
+checks around the code, because they will disagree with each other. The CLI takes
+its `state` choices from `OrderState.ALL` for the same reason.
 
 Refusing an edit is a 409 in the API and an `error:` exit in the CLI, and the
 message names the state that blocked it.
+
+## The site's order id
+
+`origin_id` is the number the site generated, e.g. `879988`. It is nullable and
+distinct from `reference`: the id is an integer, so it can be compared, indexed
+and looked up, which is what makes it possible to ask the site about one specific
+order later instead of matching on a string.
+
+The id does **not** come back as a bare number. The site's submit returns a
+serialised Eloquent model — a list whose second element is
+`{'class': 'App\\Models\\Order', 'key': 879988, 's': 'mdl'}` — and the id is its
+`key`. `OrderService._origin_id` searches that shape rather than assuming one, and
+returns `None` rather than a wrong id, because a wrong one would be stored and
+used to ask the site about an order that is not this one.
+
+The page at `/order/{origin_id}` is read by `src/services/order_page.py`; see
+`tracking.md` for the job that reconciles an order's state against it.
 
 ## Why the state check is inside the transaction
 
@@ -66,6 +92,38 @@ that justify it.
 Prices are integers in the site's currency, and a price below 1 is rejected — the
 site's own validation does this, and the refusal is surfaced rather than
 swallowed.
+
+## `origin_price` is a snapshot, not a lookup
+
+`OrderLine.origin_price` is the product's own price **as it was when the line
+was created**, parsed from the catalogue's display text (`'14,500 دج'`) by
+`Product.parse_price` and stored as a number.
+
+It is stored rather than read through `product.price` on demand, because the site
+changes prices. Reading the product at display time would rewrite the history of
+every order that line belongs to, and the margin an order was built at would stop
+being recoverable. `as_dict` reports the stored value; do not "simplify" it into
+a join.
+
+**It is set once, when the line is created, and never refreshed.** Toggling a
+top-up does not update it — a later purchase of the same product is a different
+moment, and belongs in its own order if that moment matters.
+
+Two cases give null rather than a number, and null means *unknown*, not zero:
+
+- the product was not in the catalogue when the line was created, so there was
+  no price to read. Scraping the product afterwards does **not** fill it in;
+- the product's display text has no number in it — "sur demande", "prix non
+  disponible" — so `parse_price` returns None.
+
+Lines that predate the column stay null. Backfilling from today's catalogue would
+be a guess about the past and is not done.
+
+`Product.parse_price` disambiguates separators by position, because both
+conventions occur: with a comma and a dot present the rightmost is the decimal
+point; with one kind, a group of exactly three digits is a thousands separator
+and a shorter group is a decimal. Only the whole part is kept — an order line
+sells in whole units, and dropping cents beats rounding them into a total.
 
 ## Catalogue dependency
 
