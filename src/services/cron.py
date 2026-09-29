@@ -17,6 +17,7 @@ Only one pass may run at a time. A lock file makes that true across processes,
 so two cron entries firing together cannot double-scrape the site.
 """
 
+import logging
 import os
 import sys
 import time
@@ -24,6 +25,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from src.config import Config
+
+logger = logging.getLogger(__name__)
 
 # The lock lives beside the database so a relative path cannot put it somewhere
 # that is not shared between processes.
@@ -300,5 +303,13 @@ class Cron:
 
   @staticmethod
   def _say(message):
-    """Progress goes to stderr so stdout stays free for a summary to pipe."""
+    """Progress goes to stderr, and to the queue's own log.
+
+    stderr on its own is not a record. A queue is run in the background and then
+    never watched again, so the only evidence it did anything is what it wrote to
+    a file — and a pass that failed silently looks exactly like a pass that found
+    nothing to do. Both destinations, because they are read by different people:
+    one watching the terminal, one reading the log after the fact.
+    """
     print(f"cron: {message}", file=sys.stderr, flush=True)
+    logger.info("%s", message)

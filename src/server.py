@@ -39,8 +39,8 @@ from src.controllers import (
   TelegramController,
   TrackersController,
 )
+from src.controllers.dashboard_log import DashboardLogger
 from src.controllers.dependencies import Dependencies
-from src.logging_setup import configure_logging
 from src.models import Role, User
 from src.utils.livewire import Livewire, ensure_db
 from src.version import VERSION
@@ -173,6 +173,10 @@ def create_app():
   # no-op once a super exists, and it never resets an existing password.
   _bootstrap_super()
 
+  # Added last, after every route is in place, so it wraps the finished app
+  # rather than a half-built one.
+  app.add_middleware(DashboardLogger)
+
   return app
 
 
@@ -304,11 +308,14 @@ app = create_app()
 if __name__ == "__main__":
   import uvicorn
 
-  configure_logging()
+  from src.logging_setup import UVICORN_LOG_CONFIG, Logging
+
+  Logging.configure()
 
   uvicorn.run(
     "src.server:app",
     host=Config.host(),
     port=Config.port(),
     reload=Config.reload(),
+    log_config=UVICORN_LOG_CONFIG,
   )

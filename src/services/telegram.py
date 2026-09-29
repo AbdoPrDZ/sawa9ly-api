@@ -17,6 +17,8 @@ screenshot. The code is what makes the binding mean something.
 """
 
 import logging
+import signal
+import threading
 import time
 
 from src.config import Config
@@ -39,6 +41,105 @@ TEST_TEXT = (
   "This is a test, not a real event. If you can read this, your Telegram link "
   "is working and notifications will arrive here."
 )
+
+
+class _Interruptible:
+  """A stop that works even while a long poll is blocking.
+
+  A long poll is one blocking socket read, held open server-side for
+  `TELEGRAM_POLL_TIMEOUT` seconds. On Windows a signal does not reach the Python
+  interpreter until the blocking call returns, so Ctrl-C in a listener that is
+  simply sitting there appears to do nothing for most of a minute — long enough
+  that the reasonable conclusion is that it cannot be stopped at all. It can; it
+  is just blocked, and the fix is not to be inside the blocking call.
+
+  So the poll runs on a daemon thread and this waits for it in short slices from
+  the main thread, which is back in Python bytecode often enough to be handed the
+  signal within a fraction of a second.
+
+  The abandoned poll is not a problem. The thread is a daemon, so the process
+  still exits; the update it was waiting for is simply replayed on the next
+  start, which this listener already handles, and the offset is only advanced for
+  updates it actually saw.
+  """
+
+  #: How long to wait between checks for a stop. Short enough to feel immediate,
+  #: long enough that an idle listener is not spinning.
+  SLICE_SECONDS = 0.2
+
+  def __init__(self):
+    self.stop = threading.Event()
+    self.previous = None
+    self.previous_break = None
+    # What the abandoned poll had managed so far. A listener stopped mid-poll
+    # still handled a real number of updates, and reporting the count is the
+    # difference between a summary and a shrug.
+    self.progress = {}
+
+  def arm(self):
+    """Take over SIGINT so the first Ctrl-C stops rather than raising.
+
+    Installed rather than merely caught because the exception cannot be raised
+    while the main thread is blocked; the handler's whole job is to set a flag.
+
+    SIGBREAK is taken too, so Ctrl-Break works as well. It is the one a terminal
+    can deliver to a process running in its own group, which is how a listener
+    started in the background gets stopped.
+    """
+    self.previous = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, self._on_interrupt)
+
+    if hasattr(signal, "SIGBREAK"):
+      self.previous_break = signal.getsignal(signal.SIGBREAK)
+      signal.signal(signal.SIGBREAK, self._on_interrupt)
+
+  def disarm(self):
+    if self.previous is not None:
+      signal.signal(signal.SIGINT, self.previous)
+      self.previous = None
+
+    if self.previous_break is not None:
+      signal.signal(signal.SIGBREAK, self.previous_break)
+      self.previous_break = None
+
+  def requested(self):
+    return self.stop.is_set()
+
+  def _on_interrupt(self, signum, frame):
+    # Logged here, from the handler, because the line is what tells a person
+    # pressing Ctrl-C that it registered — the process may take a moment longer
+    # to unwind and they would otherwise press it again.
+    if not self.stop.is_set():
+      logger.info("telegram: interrupt received, stopping")
+
+    self.stop.set()
+
+  def run(self, work):
+    """Run `work` on a daemon thread until it finishes or a stop is requested.
+
+    Returns what `work` returned, or None if it was asked to stop first.
+    """
+    box = {}
+
+    def target():
+      try:
+        box['result'] = work()
+      except BaseException as error:
+        box['error'] = error
+
+    thread = threading.Thread(target=target, daemon=True, name="telegram-poll")
+    thread.start()
+
+    while thread.is_alive() and not self.stop.is_set():
+      thread.join(self.SLICE_SECONDS)
+
+    if self.stop.is_set():
+      return None
+
+    if 'error' in box:
+      raise box['error']
+
+    return box.get('result')
 
 
 class TelegramService:
@@ -336,6 +437,12 @@ class TelegramService:
 
   # --- the listener ---------------------------------------------------
 
+  #: How many idle polls between "still here" lines. At the default 30s long poll
+  #: that is one line every five minutes: often enough to prove the listener is
+  #: alive and polling without burying the interesting lines, which is the whole
+  #: reason this log exists.
+  HEARTBEAT_POLLS = 10
+
   @staticmethod
   def listen(bot=None, max_updates=None):
     """Poll for updates and act on them until told to stop.
@@ -350,15 +457,63 @@ class TelegramService:
     harmless here and cheaper than another piece of state: a code is single-use,
     so a replayed one is refused cleanly and the sender is told why.
 
+    The polling runs on a thread so that Ctrl-C is answered promptly rather than
+    after the current long poll returns; see `_Interruptible`.
+
     Returns:
         dict summarising what the run did.
     """
     bot = bot or Telegram()
+    stop = _Interruptible()
+
+    logger.info(
+      "telegram: listening as %s, long poll %ss",
+      Config.telegram_bot_name() or "(unnamed)", Config.TELEGRAM_POLL_TIMEOUT,
+    )
+
+    stop.arm()
+
+    try:
+      result = stop.run(
+        lambda: TelegramService._poll(bot, max_updates, stop)
+      )
+    finally:
+      stop.disarm()
+
+    if result is None:
+      # A stop, not a failure. The counts are whatever the abandoned poll had
+      # reached, so the summary is still worth having.
+      stopped = {
+        'updates': stop.progress.get('updates', 0),
+        'bound': stop.progress.get('bound', 0),
+        'offset': stop.progress.get('offset'),
+        'stopped': True,
+      }
+
+      logger.info("telegram: stopped after %s updates, %s linked",
+                  stopped['updates'], stopped['bound'])
+
+      return stopped
+
+    logger.info(
+      "telegram: finished, %s updates, %s linked", result['updates'],
+      result['bound'],
+    )
+
+    return result
+
+  @staticmethod
+  def _poll(bot, max_updates, stop):
+    """The polling loop itself, run on a thread by `listen`."""
     offset = None
     handled = 0
     bound = 0
+    idle = 0
 
     while max_updates is None or handled < max_updates:
+      if stop.requested():
+        break
+
       try:
         updates = bot.get_updates(offset)
       except TelegramError as error:
@@ -371,7 +526,21 @@ class TelegramService:
 
         raise
 
-      for update in updates or []:
+      if not updates:
+        # An idle poll is the normal case, and it is exactly the case that used
+        # to leave the log empty — a listener that is working perfectly said
+        # nothing at all, so "no logs" was indistinguishable from "not running".
+        idle += 1
+
+        if idle % TelegramService.HEARTBEAT_POLLS == 0:
+          logger.info("telegram: still listening, %s updates so far", handled)
+
+        continue
+
+      # Updates arrived, so the next heartbeat is a fresh one.
+      idle = 0
+
+      for update in updates:
         update_id = update.get("update_id")
 
         # Confirm everything up to and including this one, so it is not sent
@@ -385,6 +554,10 @@ class TelegramService:
 
         if outcome and outcome.startswith("bound:"):
           bound += 1
+
+      # Published as it goes, so a stop that abandons this thread still reports
+      # the counts rather than nothing.
+      stop.progress.update(updates=handled, bound=bound, offset=offset)
 
     return {
       'updates': handled,

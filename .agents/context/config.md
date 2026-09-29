@@ -49,7 +49,7 @@ test can change the environment and re-read.
 | --- | --- | --- |
 | Database | `DATABASE_URL`, or `SQLITE_FILE`; or `DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | SQLite at `data/sawa9ly.db` |
 | HTTP server | `API_HOST`, `API_PORT`, `API_RELOAD` | `127.0.0.1:8000`, reload off |
-| Logging | `LOG_LEVEL`, `LOG_FILE`, `LOG_FORMAT` | `WARNING`, console, text |
+| Logging | `LOG_LEVEL`, `LOG_DIR`, `LOG_FILE`, `LOG_FORMAT` | `INFO`, `data/logs`, five files, text |
 | Super admin | `SUPER_ADMIN_USERNAME`, `SUPER_ADMIN_PASSWORD` | none — both required |
 | Dashboard | `DASHBOARD_SECRET` | generated once, stored in the database |
 | Tracking queue | `CRON_INTERVAL`, `CRON_DELAY` | 300s, 1.0s |
@@ -92,45 +92,93 @@ receives a concrete name and none of them knows the fallback exists.
 `bool(os.getenv(...))` is wrong — it makes the string `"false"` true. `Config`
 recognises `1/true/yes/on` and treats everything else as false.
 
-## Logging is off until asked for
+## Logging is on by default, and split by subsystem
 
-The default level is `WARNING` and nothing goes to a file, so a normal run is
-quiet. `LOG_LEVEL=INFO` or `LOG_FILE` turns it up. `src/logging_setup.py` holds
-the handlers and a filter that redacts any log line mentioning a password,
-token, key or cookie — the project handles all four, and a stray
-`logger.info("%s", user)` would otherwise put a credential in a log file.
+`src/logging_setup.py` owns it. The level defaults to `INFO` and the files are on,
+because the queue and the bot are run in the background and then never seen again
+— their pass summaries are the only record that they ran at all.
 
-The filter is idempotent because a record is passed to every handler, and both a
-console and a file handler are configured.
+One file per subsystem, because the api, the dashboard, the CLI, the queue and the
+bot fail separately. `LOG_DIR` (default `logs`, resolved under `data/`) holds them:
 
-It matches on the **message text**, not on the argument values, and `SECRET_WORDS`
-contains `credential`, `token` and `cookie`. So a message like "the site rejected
-the credentials" loses its arguments and prints a literal `%s` followed by
-`[redacted]`. Write log messages around those words — "the site refused the
-sign-in" — or the line silently stops carrying the username it was written to
-carry.
+| File | Routed by logger name |
+|---|---|
+| `sawa9ly-api.log` | `src.server`, `src.controllers`, `src.services` (not the cron ones), `src.utils`, `src.db`, `uvicorn*` |
+| `sawa9ly-dashboard.log` | `src.controllers.dashboard_log` only |
+| `sawa9ly-cli.log` | `cli.*` |
+| `sawa9ly-cron.log` | `src.services.{cron,tracking,order_sync,notifications}` |
+| `sawa9ly-telegram.log` | `src.utils.telegram`, `src.services.telegram` |
+
+`LOG_FILE` replaces all five with one file, for whoever wants a single stream.
+
+**Routing is by logger name, not by process.** `serve` is one process serving both
+the API and the dashboard, and every CLI command is a separate process that can
+touch any subsystem, so a process-based split would not hold. `SUBSYSTEMS` in
+`logging_setup` is an ordered tuple of prefixes and a record belongs to the **first**
+match, on a dot boundary — so `src.services.telegram` must be listed before
+`src.services`, and an unrelated `src.services.telegramish` is not swallowed by it.
+Anything unrecognised goes to the api, the widest thing here, rather than vanishing.
+
+A file is created on its first write (`delay=True`), and its directory at the same
+moment (`SubsystemFileHandler._open`). An install that has logged nothing has no
+empty files and no empty `logs/` directory.
+
+### The dashboard log is written by hand, not filtered out of uvicorn's
+
+`src/controllers/dashboard_log.py` is raw-ASGI middleware that logs only
+`/dashboard*` and `/pages*`. The obvious alternative — splitting uvicorn's access
+log by path — depends on the shape of uvicorn's access-log arguments, which is an
+internal detail. `/api` calls made by the dashboard are the api log's business.
+
+It is written as raw ASGI rather than `BaseHTTPMiddleware` because a middleware
+that only observes a request has no business buffering the response, and this app
+serves the dashboard bundle.
+
+### The access log is pinned to INFO
+
+`ALWAYS_INFO_LOGGERS` holds `uvicorn`, `uvicorn.access` and `uvicorn.error` at INFO
+whatever `LOG_LEVEL` says. An api log that has stopped recording who called what is
+not an api log, and raising the level to quiet an application's own debugging
+should not delete the traffic history with it. Nothing is lost: a higher level only
+means fewer of the project's *own* lines.
+
+### Secrets are redacted out of the finished line
+
+`SecretFilter` strips the value after any `password`/`token`/`cookie`/`secret`/
+`api_key`/`authorization`/`credential` field, in the **rendered** message. This
+matters: the previous version only cleared `record.args`, which helped a caller who
+passed the secret as an argument (`logger.info("login %s", pw)`) and did nothing at
+all for one who built the string first (`logger.info(f"login {pw}")`), and it
+dropped the arguments of *un*redacted records too, so those lines were written out
+as a literal `%s`. Redacting after `getMessage()` covers both caller styles.
+
+It cannot see a Telegram token in a URL — `/bot<TOKEN>/sendMessage` has no field
+name before it — so `Telegram._redact` remains the thing that handles that, and is
+not redundant. Keep both.
+
+A filter runs once per handler and there are six of them, so the result is marked on
+the record (`_sawa9ly_redacted`) and computed once; otherwise one secret would be
+marked six times or a record could reach one handler unredacted and the next
+redacted.
 
 ### Where the configuration is actually applied
 
-`configure_logging()` has exactly one call site: the `__main__` block of
-`src/server.py`. The two documented run paths — `python main.py serve`
-(`ServeCli.dispatch` calls `uvicorn.run` itself) and `uvicorn src.server:app` —
-never reach that block, so on a normal run the `LOG_*` variables are read but
-never applied, and no log file is created.
+`configure_logging()` is called from `App.main()`, so every command is covered, and
+again in `ServeCli.dispatch` and in the `__main__` block of `src/server.py`. Both
+`uvicorn.run` calls pass `log_config=UVICORN_LOG_CONFIG` (None), because uvicorn
+otherwise installs its own `dictConfig` over the root logger and every file stays
+empty.
 
-A quiet run is therefore not evidence of a bad `.env`. Two independent reasons
-apply, and both are true at once:
+Both doors onto the server work: `python main.py serve` and `python -m src.server`.
+Plain `python src/server.py` does **not** — running a file inside the package puts
+`src/` on `sys.path` rather than the root, so `import src.config` fails. It never
+worked; the old `.env.example` claimed otherwise.
 
-- **Nothing emits from most modules.** The log lines that exist are in
-  `src/utils/livewire.py` (session lifecycle and transport) and
-  `src/services/cart.py` (checkout stages); nothing in `cli/`, `src/services/`
-  beyond the cart, `src/controllers/` or `src/models/` logs at all. Adding the
-  first call in a new module is what makes `LOG_LEVEL` observable there.
-- **Uvicorn logs itself.** It applies its own `dictConfig` to the `uvicorn`,
-  `uvicorn.error` and `uvicorn.access` loggers with its own handlers, without
-  touching the root logger. That is why startup and access lines appear at all
-  when `configure_logging()` has not run.
+### What emits
 
-So a fix has two halves, and doing only the first changes nothing visible: call
-`configure_logging()` on the path that actually starts the server, and emit
-records from the code that needs diagnosing.
+Emitting is still sparse outside the queue, the bot and the CLI, and that is the
+remaining half of the problem if a subsystem's file is empty: nothing in
+`src/services/` beyond the cron-related ones, and nothing in `src/models/`, logs at
+all. Adding the first call in a module is what makes it appear. `Cron._say` writes
+to stderr *and* the cron log, because stderr alone is not a record once the process
+is backgrounded.

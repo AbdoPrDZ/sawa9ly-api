@@ -102,6 +102,10 @@ class TelegramCli:
       try:
         return TelegramService.listen(max_updates=args.max_updates)
       except KeyboardInterrupt:
+        # A fallback. `listen` installs its own SIGINT handler precisely because
+        # this cannot arrive while a long poll is blocking, but the handler can
+        # still be replaced by something else in between, and an unhandled
+        # Ctrl-C printing a traceback is a poor way to learn that.
         print("\nstopped", file=sys.stderr, flush=True)
 
         return {'stopped': True}

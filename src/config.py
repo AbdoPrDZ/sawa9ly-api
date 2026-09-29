@@ -140,23 +140,70 @@ class Config:
   # --- logging --------------------------------------------------------
 
   LOG_LEVEL_VAR = "LOG_LEVEL"
-  """`debug`, `info`, `warning` (default), `error` or `critical`."""
+  """`debug`, `info` (default), `warning`, `error` or `critical`.
+
+    `info` rather than `warning`, because the queue and the bot are the two things
+    you run in the background and then never see again: their pass summaries and
+    their per-event lines are the only record that they ran at all. Raise this to
+    quiet them, and note that the HTTP access log is unaffected - see
+    `logging_setup`, which pins that one deliberately."""
+
+  LOG_DIR_VAR = "LOG_DIR"
+  """Where the per-subsystem log files go. Default `data/logs`.
+
+    One file per subsystem - api, dashboard, cli, cron, telegram - so a failure in
+    one does not have to be read out of the others. Files appear only when
+    something is written to them, so a quiet day leaves none behind."""
 
   LOG_FILE_VAR = "LOG_FILE"
-  """Optional. When set, logs also go to this file instead of the console."""
+  """Optional. A single file receiving everything, instead of the five.
+
+    For whoever wants one stream, or wants it somewhere else. It replaces the
+    per-subsystem files rather than adding to them; two copies of every line is
+    worse than either."""
 
   LOG_FORMAT_VAR = "LOG_FORMAT"
   """`text` (default) or `json` for structured lines."""
 
-  DEFAULT_LOG_LEVEL = "WARNING"
+  DEFAULT_LOG_LEVEL = "INFO"
+  DEFAULT_LOG_DIR = "logs"
 
   @classmethod
   def log_level(cls):
     return (os.getenv(cls.LOG_LEVEL_VAR) or cls.DEFAULT_LOG_LEVEL).upper()
 
   @classmethod
+  def log_dir(cls):
+    """The directory the per-subsystem log files live in.
+
+    Resolved but not created: an empty directory on a machine that has logged
+    nothing yet is clutter, and each handler makes its own file on first write.
+    """
+    raw = os.getenv(cls.LOG_DIR_VAR) or cls.DEFAULT_LOG_DIR
+    path = Path(raw)
+
+    if not path.is_absolute():
+      path = cls.DATA_DIR / path
+
+    return path
+
+  @classmethod
   def log_file(cls):
-    return os.getenv(cls.LOG_FILE_VAR)
+    """A single file receiving every log line, instead of the five.
+
+    Resolved against the data directory when relative, and None when unset.
+    """
+    raw = os.getenv(cls.LOG_FILE_VAR)
+
+    if not raw:
+      return None
+
+    path = Path(raw)
+
+    if not path.is_absolute():
+      path = cls.DATA_DIR / path
+
+    return path
 
   @classmethod
   def log_format(cls):
