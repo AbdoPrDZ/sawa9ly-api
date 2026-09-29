@@ -283,6 +283,11 @@ class AdminUserOut(BaseModel):
 
   `active_api_keys` counts only keys that are neither revoked nor expired, which
   is the number an operator actually cares about.
+
+  A user owns their own sawa9ly and Telegram settings, so an admin sees whether
+  they are set up — `has_sawa9ly_credentials` and `telegram_chat_id` — and never
+  the values. That is enough to answer "why is this account not syncing?" without
+  the admin holding somebody else's credentials.
   """
 
   id: int
@@ -290,12 +295,12 @@ class AdminUserOut(BaseModel):
   role: str
   is_admin: bool
   """False for a `super`, which the dashboard may not change or delete. The UI
-  disables the controls from this rather than guessing."""
+    disables the controls from this rather than guessing."""
   can_be_managed: bool = True
-  sawa9ly_email: str | None = None
-  """Whether this user has both sawa9ly credentials. Only a super may write
-  them; anybody may set their own from the profile page."""
   has_sawa9ly_credentials: bool = False
+  telegram_chat_id: str | None = None
+  """Which chat this user's notifications go to, or null. Not a credential, and
+    the reason a super needs it: to tell somebody which chat they linked."""
   can_log_in: bool = False
   active_api_keys: int = 0
   clients: int = 0
@@ -307,15 +312,14 @@ class AdminUserIn(BaseModel):
   """Fields the dashboard may change. Every one is optional.
 
   `password` is the dashboard login password and is hashed; it is never
-  returned. `sawa9ly_password` is a separate concern, sent only when the
-  operator is deliberately replacing the stored site credential.
+  returned. There is deliberately no `sawa9ly_email` or `sawa9ly_password` here:
+  those belong to the user, who sets them on their own profile. An administrator
+  who could type them in could also sign in as that user on the site.
 
   A `role` of `super` is rejected by the API: the dashboard can neither hand out
   nor remove that role. See `src/services/accounts.py`.
   """
 
-  sawa9ly_email: str | None = None
-  sawa9ly_password: str | None = None
   role: str | None = Field(default=None, description="'admin' or 'user'")
   password: str | None = Field(default=None, min_length=1)
 
@@ -341,3 +345,41 @@ class AdminApiKeyOut(BaseModel):
 class AdminApiKeyCreateIn(BaseModel):
   label: str | None = None
   expires_in_days: int | None = Field(default=None, ge=1)
+
+
+# --- telegram ----------------------------------------------------------
+
+
+class TelegramBindingOut(BaseModel):
+  """A user's link to a Telegram chat.
+
+  No code is ever returned. The code exists only in the URL handed out at the
+  moment it is issued, so there is nothing here to redact and nothing here to
+  leak later.
+  """
+
+  user_id: int
+  bound: bool = False
+  chat_id: str | None = None
+  chat_type: str | None = None
+  chat_title: str | None = None
+  chat_username: str | None = None
+  code_pending: bool = False
+  """True while a code is outstanding and unused, so the dashboard can say
+    "waiting for you to open the link" instead of showing nothing."""
+  code_expires_at: str | None = None
+  verified_at: str | None = None
+  created_at: str | None = None
+
+
+class TelegramLinkOut(BaseModel):
+  """A freshly issued binding link.
+
+  `url` and `code` are the plaintext, shown once: the code is stored only as a
+  hash, so this response is the only time it can be read.
+  """
+
+  username: str
+  url: str
+  code: str
+  expires_at: str | None = None

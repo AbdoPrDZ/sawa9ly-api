@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { listProducts } from '../api/catalogue'
 import { listTrackers } from '../api/trackers'
 import type { CatalogueProduct } from '../api/types'
+import { AdminOnly } from '../components/AdminOnly'
 import { Banner } from '../components/Banner'
 import { FetchProduct } from '../components/FetchProduct'
 import { Spinner } from '../components/Spinner'
@@ -72,10 +73,14 @@ export function Products() {
       {!products ? (
         <Spinner label="Loading products" />
       ) : products.length === 0 ? (
-        <p className="muted">
-          Nothing saved yet. Fetch a product by its id above, or run{' '}
-          <code>python main.py catalogue save &lt;id&gt; --user &lt;name&gt;</code>.
-        </p>
+        <>
+          <p className="muted">Nothing saved yet. Fetch a product by its id above.</p>
+          <AdminOnly>
+            <p className="muted">
+              Or run <code>python main.py catalogue save &lt;id&gt; --user &lt;name&gt;</code>.
+            </p>
+          </AdminOnly>
+        </>
       ) : (
         <table>
           <thead>

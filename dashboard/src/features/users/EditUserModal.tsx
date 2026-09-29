@@ -9,6 +9,10 @@ import { Modal } from '../../components/Modal'
  * Only changed fields are sent, because the API treats an absent key as
  * "unchanged". An empty password box therefore means "leave the password
  * alone" — clearing one has to be deliberate, so it is a CLI action instead.
+ *
+ * There is no sawa9ly field, and that is the point: a user owns their site
+ * credentials and sets them on their own profile. An admin who could type them
+ * in could also act as that user on sawa9ly.
  */
 export function EditUserModal({
   user,
@@ -24,7 +28,6 @@ export function EditUserModal({
   // Only `user` and `admin` are ever offered, so the state cannot hold the root
   // role. A user that has it returns early below, before the form is rendered.
   const [role, setRole] = useState<Role>(user.role === 'admin' ? 'admin' : 'user')
-  const [email, setEmail] = useState(user.sawa9ly_email ?? '')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -50,7 +53,7 @@ export function EditUserModal({
     event.preventDefault()
     setBusy(true)
 
-    const edits: UserEdits = { sawa9ly_email: email }
+    const edits: UserEdits = {}
     if (role !== user.role) edits.role = role
     if (password) edits.password = password
 
@@ -75,11 +78,14 @@ export function EditUserModal({
           </select>
         </Field>
 
-        <Field label="Sawa9ly email">
-          <input value={email} onChange={(event) => setEmail(event.target.value)} />
-        </Field>
-
-        <Field label="New dashboard password" hint="Leave empty to keep the current one.">
+        <Field
+          label="New dashboard password"
+          hint={
+            isSelf
+              ? 'Leave empty to keep the current one.'
+              : 'Leave empty to keep the current one. Their sawa9ly email and password are their own to set, from their profile.'
+          }
+        >
           <input
             type="password"
             value={password}

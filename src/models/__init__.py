@@ -4,11 +4,14 @@ from src.db import Base
 from src.models.api_key import ApiKey
 from src.models.client import Client
 from src.models.landing_page import LandingPage, PageState
+from src.models.notification import Notification
+from src.models.notification_delivery import NotificationDelivery
 from src.models.order import Order, OrderState
 from src.models.order_line import OrderLine
 from src.models.product import Product
 from src.models.secret import Secret
 from src.models.setting import SESSION_KEY, Setting
+from src.models.telegram_binding import TelegramBinding, TelegramBindingError
 from src.models.tracker import TargetModel, Tracker
 from src.models.user import Role, User
 
@@ -18,6 +21,8 @@ __all__ = [
   "Base",
   "Client",
   "LandingPage",
+  "Notification",
+  "NotificationDelivery",
   "Order",
   "OrderLine",
   "OrderState",
@@ -27,6 +32,8 @@ __all__ = [
   "SESSION_KEY",
   "Secret",
   "Setting",
+  "TelegramBinding",
+  "TelegramBindingError",
   "TargetModel",
   "Tracker",
   "User",

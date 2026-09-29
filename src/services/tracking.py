@@ -14,6 +14,7 @@ Two rules shape everything here:
   afterwards. Ten users watching one product is one request, not ten.
 """
 
+import logging
 import time
 from datetime import timedelta
 
@@ -22,6 +23,8 @@ from src.models import Product, TargetModel, Tracker, User
 from src.services import Product as ProductPage
 from src.utils import Livewire
 from src.utils.livewire import LivewireError
+
+logger = logging.getLogger(__name__)
 
 # The stored fields a scan compares. Anything not listed is not diffed, so
 # adding a column to Product does not silently start generating change records.
@@ -194,18 +197,26 @@ class Tracking:
       'trackers': 0,
       'scanners': 0,
       'changed_fields': {},
+      'notified': 0,
+      'notify_errors': [],
       'errors': [],
     }
 
     with session_scope() as db:
       targets = Tracker.watched_targets(db, target_model)
       clients = {}
+      # One Telegram client for the whole pass, built only if something actually
+      # changes. Rebuilding it per event would mean a new token read and a new
+      # session per notification, and an installation with no token would raise
+      # once per watched product instead of once per pass.
+      bot = None
+      bot_unavailable = False
 
       for target in targets:
         product = Product.get_by_id(db, target['target_id'])
 
         if product is None:
-          # A tracker whose target row has gone should not happen, because the
+          # A tracker whose target row is gone should not happen, because the
           # foreign key cascades. Reported rather than silently dropped.
           summary['skipped'] += 1
           continue
@@ -235,12 +246,34 @@ class Tracking:
           )
           continue
 
-        found = Tracking._apply(db, product, info, checked)
+        if not bot_unavailable and bot is None:
+          bot, bot_unavailable = Tracking._bot()
+
+          if bot_unavailable:
+            summary['notify_errors'].append(
+              "nobody was notified this pass: there is no usable bot token, so "
+              "set TELEGRAM_BOT_TOKEN in .env to switch notifications on"
+            )
+
+        found = Tracking._apply(db, product, info, checked, bot)
         summary['trackers'] += found['trackers']
 
         if found['changed_fields']:
           summary['changed'] += 1
           summary['changed_fields'][str(product.product_id)] = found['changed_fields']
+
+        notification = found['notification']
+
+        if notification is not None:
+          # Counted from the row rather than from what the send believed, so the
+          # number is what actually went rather than what was attempted.
+          summary['notified'] += notification.sent
+
+          for delivery in notification.undelivered:
+            summary['notify_errors'].append(
+              f"notification {notification.id} to user {delivery.user_id}: "
+              f"{delivery.send_error}"
+            )
 
       summary['scanners'] = len(clients)
 
@@ -275,15 +308,36 @@ class Tracking:
     return None
 
   @staticmethod
-  def _apply(db, product, info, checked):
+  def _bot():
+    """A Telegram client for this pass, or why there isn't one.
+
+    A missing token is not an error: notifications are optional, and an
+    installation without one still wants a working queue. The caller records it
+    once per pass so "nobody was told" is never silent.
+    """
+    from src.utils import Telegram, TelegramError
+
+    try:
+      return Telegram(), False
+    except TelegramError as error:
+      logger.info("notifications are off for this pass: %s", error)
+      return None, True
+
+  @staticmethod
+  def _apply(db, product, info, checked, bot=None):
     """Diff a scrape against the stored row, update it, and stamp the trackers.
 
     The diff is transient: it decides whether `last_changed_at` moves and which
     field names the pass reports. Nothing is stored, so the only record of a
     change is the updated product and that timestamp on the trackers.
 
-    Returns the changed field names and how many trackers were stamped, so the
-    caller can count without re-querying.
+    A change in a field somebody asked to hear about is dispatched here, because
+    this is the only place that knows the value moved *and* what it moved from.
+    The previous value is read before the save for exactly that reason.
+
+    Returns the changed field names, how many trackers were stamped, and the
+    notification that was raised if any, so the caller can count without
+    re-querying.
     """
     previous = product.as_dict()
     changed_fields = []
@@ -307,7 +361,43 @@ class Tracking:
 
     db.commit()
 
-    return {'changed_fields': changed_fields, 'trackers': len(trackers)}
+    notification = Tracking._notify(db, product, trackers, previous, changed_fields, bot)
+
+    return {
+      'changed_fields': changed_fields,
+      'trackers': len(trackers),
+      'notification': notification,
+    }
+
+  @staticmethod
+  def _notify(db, product, trackers, previous, changed_fields, bot=None):
+    """Raise a notification for a change somebody asked to hear about, if any.
+
+    One event per product, not one per changed field: a scrape that finds the
+    price and the stock both different is one thing that happened once, and two
+    messages about it is the sort of thing that gets a bot muted. Which fields
+    moved is decided in `src/services/notifications.py` and listed in one message.
+
+    `previous` is read before the save for exactly this reason — a price raised
+    after the fact is the price, and the old one is gone.
+    """
+    if bot is None:
+      return None
+
+    from src.services.notifications import Notifications
+
+    try:
+      return Notifications.product_changed(
+        db, product, trackers, previous, changed_fields, bot
+      )
+    except Exception as error:  # noqa: BLE001 - a bad message must not fail the pass
+      # Whatever went wrong, the product's stored state is already correct and
+      # the trackers are already stamped. Only the notification was lost, and
+      # the next change will raise another.
+      logger.error(
+        "could not notify watchers of product %s: %s", product.product_id, error
+      )
+      return None
 
   # --- helpers --------------------------------------------------------
 

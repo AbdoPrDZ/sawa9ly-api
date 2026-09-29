@@ -5,10 +5,12 @@ skip the rest.
 
 | Domain | Covers | Read it when |
 | --- | --- | --- |
-| `authentication.md` | API keys, per-user sawa9ly sessions, credentials | Adding auth, touching keys, debugging "logged out" or a wrong-user cart |
+| `authentication.md` | API keys, per-user sawa9ly sessions, credentials, roles | Adding auth, touching keys, debugging "logged out" or a wrong-user cart |
 | `orders.md` | Order lifecycle, state machine, the two product ids | Anything touching orders or order lines |
 | `checkout.md` | Driving the site's cart and two-step checkout | Touching cart mutation, prices, or submitting an order |
 | `catalogue.md` | Saved product info and delivery clients | Touching products, scraped data, or checkout recipient fields |
+| `telegram.md` | Linking a user to a chat, and the bot that listens for it | Adding notifications, touching the bot token, or debugging an unlinked chat |
+| `notifications.md` | Recording an event and delivering it to the people who asked | Adding a notification event, or debugging a message that did not arrive |
 
 ## Boundaries
 
@@ -21,6 +23,12 @@ skip the rest.
   where to deliver. Both are inputs to an order, never part of one.
 - **Authentication** owns identity. Everything downstream takes a `Livewire` and
   does not care where it came from.
+- **Telegram** is outbound only, and optional. It reads a user's binding and
+  sends; it never affects what an order is or what it costs, and with no bot
+  token set nothing in the rest of the app changes.
+- **Notifications** is the join between something the queue noticed and the people
+  who asked to hear about it. It reads trackers and products; it changes neither,
+  and a failed send never fails a pass.
 
 The dependency arrow points one way: catalogue → orders → checkout. Nothing in
 checkout imports an order, which is what keeps the site's quirks isolated to one

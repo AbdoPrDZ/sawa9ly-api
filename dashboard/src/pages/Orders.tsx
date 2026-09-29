@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { isUnauthorized } from '../api/client'
 import { listAllOrders, listOrders } from '../api/orders'
 import type { Order } from '../api/types'
+import { AdminOnly } from '../components/AdminOnly'
 import { Banner } from '../components/Banner'
 import { OrderStateBadge } from '../components/OrderStateBadge'
 import { Spinner } from '../components/Spinner'
@@ -60,10 +61,14 @@ export function Orders() {
         isSuper ? (
           <p className="muted">No orders from anybody yet.</p>
         ) : (
-          <p className="muted">
-            No orders yet. Start one with{' '}
-            <code>python main.py order create --user &lt;name&gt;</code>.
-          </p>
+          <>
+            <p className="muted">No orders yet.</p>
+            <AdminOnly>
+              <p className="muted">
+                Start one with <code>python main.py order create --user &lt;name&gt;</code>.
+              </p>
+            </AdminOnly>
+          </>
         )
       ) : (
         <table>

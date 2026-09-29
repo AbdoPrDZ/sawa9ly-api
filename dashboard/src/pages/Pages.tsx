@@ -4,6 +4,7 @@ import { listProducts } from '../api/catalogue'
 import { isUnauthorized } from '../api/client'
 import { createPage, listPages, updatePage } from '../api/pages'
 import type { CatalogueProduct, NewPage, Page, PageEdits } from '../api/types'
+import { AdminOnly } from '../components/AdminOnly'
 import { Banner } from '../components/Banner'
 import { PageStateBadge } from '../components/PageStateBadge'
 import { Spinner } from '../components/Spinner'
@@ -98,10 +99,15 @@ export function Pages() {
       {!pages ? (
         <Spinner label="Loading pages" />
       ) : pages.length === 0 ? (
-        <p className="muted">
-          None yet. Create one above, or from the command line:{' '}
-          <code>python main.py page create 5663 &quot;Summer offer&quot; --user &lt;name&gt;</code>.
-        </p>
+        <>
+          <p className="muted">None yet. Create one above.</p>
+          <AdminOnly>
+            <p className="muted">
+              Or from the command line:{' '}
+              <code>python main.py page create 5663 &quot;Summer offer&quot; --user &lt;name&gt;</code>.
+            </p>
+          </AdminOnly>
+        </>
       ) : (
         <table>
           <thead>

@@ -36,6 +36,7 @@ from src.controllers import (
   PageController,
   ProductsController,
   PublicPageController,
+  TelegramController,
   TrackersController,
 )
 from src.controllers.dependencies import Dependencies
@@ -116,6 +117,7 @@ def create_app():
     ClientController,
     OrderController,
     PageController,
+    TelegramController,
     TrackersController,
   ):
     versioned.include_router(controller.router)

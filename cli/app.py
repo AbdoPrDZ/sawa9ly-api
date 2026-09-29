@@ -17,7 +17,9 @@ from cli.page import PageCli
 from cli.product import ProductCli
 from cli.router import RouterCli
 from cli.serve import ServeCli
+from cli.telegram import TelegramCli
 from cli.track import TrackCli
+from src.models import TelegramBindingError
 from src.services import (
   AccountsError,
   CronError,
@@ -26,6 +28,7 @@ from src.services import (
   TrackingError,
 )
 from src.utils.livewire import LivewireError
+from src.utils.telegram import TelegramError
 
 # Refusals the CLI reports as `error: ...` with a non-zero exit, rather than
 # treating them as a crash.
@@ -35,8 +38,14 @@ from src.utils.livewire import LivewireError
 # its route table — hits the super-account guard on a checkout that has neither a
 # super nor the environment to make one, and that is a setup step to report, not
 # a crash to dump a traceback over.
+#
+# TelegramError is here for the same reason: a missing bot token is a setup step,
+# and `telegram listen` says which variable to set. TelegramBindingError is its
+# sibling: "no chat is linked" and "that code is not one we issued" are answers,
+# not faults.
 EXPECTED_ERRORS = (
   LivewireError, OrderError, PageError, TrackingError, CronError, AccountsError,
+  TelegramError, TelegramBindingError,
 )
 
 
@@ -52,6 +61,7 @@ class App:
     AccountCli,
     TrackCli,
     CronCli,
+    TelegramCli,
     RouterCli,
     ServeCli,
   )
@@ -104,6 +114,7 @@ class App:
       'AccountCli': {'user', 'apikey'},
       'TrackCli': {'track'},
       'CronCli': {'cron'},
+      'TelegramCli': {'telegram'},
       'RouterCli': {'router'},
       'ServeCli': {'serve'},
     }

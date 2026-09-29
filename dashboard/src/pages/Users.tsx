@@ -105,7 +105,8 @@ export function Users() {
             <tr>
               <th>Username</th>
               <th>Role</th>
-              <th>Sawa9ly email</th>
+              <th>Sawa9ly</th>
+              <th>Telegram</th>
               <th>Keys</th>
               <th>Orders</th>
               <th>Dashboard</th>
@@ -122,7 +123,10 @@ export function Users() {
                 <td>
                   <RoleBadge role={row.role} />
                 </td>
-                <td>{brief(row.sawa9ly_email)}</td>
+                {/* Whether the user has set their own, not the value: it is
+                    theirs, and an admin only needs to know it is done. */}
+                <td>{row.has_sawa9ly_credentials ? 'set' : 'not set'}</td>
+                <td>{brief(row.telegram_chat_id)}</td>
                 <td>{row.active_api_keys}</td>
                 <td>{row.orders}</td>
                 <td>{row.can_log_in ? 'can sign in' : 'no password'}</td>
@@ -157,11 +161,7 @@ export function Users() {
       )}
 
       {creating ? (
-        <CreateUserModal
-          canSetSiteCredentials={isSuper}
-          onCancel={() => setCreating(false)}
-          onSubmit={onCreate}
-        />
+        <CreateUserModal onCancel={() => setCreating(false)} onSubmit={onCreate} />
       ) : null}
 
       {editing ? (

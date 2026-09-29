@@ -35,6 +35,10 @@ class Product(Base):
   # No cascade: a product outlives the pages written about it, and removing one
   # should not silently take a user's writing with it.
   landing_pages: Mapped[list["LandingPage"]] = relationship(back_populates="product")
+  # No cascade either: a notification is a record of something a user was told,
+  # and the product can be deleted out from under it. The FK is SET NULL and the
+  # message text is kept verbatim, so the record stays readable afterwards.
+  notifications: Mapped[list["Notification"]] = relationship(back_populates="product")
 
   @classmethod
   def get(cls, db, product_id):

@@ -159,22 +159,6 @@ class Accounts:
     return True, ""
 
   @classmethod
-  def may_set_site_credentials(cls, actor):
-    """Whether `actor` may write a user's sawa9ly email or password for them.
-
-    Super only. A user edits their own through the profile page; an admin
-    creating a user cannot seed credentials on their behalf, so a newly added
-    user starts with none and sets their own.
-    """
-    if not Role.is_super(actor.role):
-      return False, (
-        "Only a 'super' account can set another user's sawa9ly credentials. "
-        "The user can add their own from their profile page."
-      )
-
-    return True, ""
-
-  @classmethod
   def may_edit_user(cls, actor, target):
     """Whether `actor` may change `target` in the admin area.
 

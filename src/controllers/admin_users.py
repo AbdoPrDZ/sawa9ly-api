@@ -30,10 +30,10 @@ class AdminUsersController:
                   db: Session = Depends(Dependencies.get_db)):
     """Create a user.
 
-    Any administrator may add a user. Only a super may seed the new user's
-    sawa9ly credentials — an admin adding a user cannot write credentials on
-    somebody's behalf, so the user starts with none and sets their own from the
-    profile page.
+    Any administrator may add a user, and may set the dashboard login password
+    they need to sign in with. Neither may set the new user's sawa9ly
+    credentials: those are the user's own to set, from their profile, and an
+    administrator who could type them in could also act as that user on the site.
 
     A duplicate username is a 409 rather than a silent update: overwriting
     somebody because a name was typed twice is not a useful merge.
@@ -48,27 +48,14 @@ class AdminUsersController:
     if not allowed:
       raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
 
-    wanted_credentials = bool(body.sawa9ly_email or body.sawa9ly_password)
-
-    if wanted_credentials:
-      allowed, reason = Accounts.may_set_site_credentials(admin)
-
-      if not allowed:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
-
     if User.get(db, body.username) is not None:
       raise HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail=f"A user named '{body.username}' already exists.",
       )
 
-    user = User.get_or_create(
-      db,
-      body.username,
-      sawa9ly_email=body.sawa9ly_email,
-      sawa9ly_password=body.sawa9ly_password,
-      role=body.role,
-    )
+    # No sawa9ly credentials here, deliberately: the new user sets their own.
+    user = User.get_or_create(db, body.username, role=body.role)
 
     if body.password:
       user.set_password(db, body.password)
@@ -101,18 +88,6 @@ class AdminUsersController:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
 
       user.set_role(db, body.role)
-
-    if body.sawa9ly_email is not None or body.sawa9ly_password is not None:
-      allowed, reason = Accounts.may_edit_user(admin, user)
-
-      if not allowed:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
-
-      if body.sawa9ly_email is not None:
-        user.sawa9ly_email = body.sawa9ly_email or None
-
-      if body.sawa9ly_password is not None:
-        user.sawa9ly_password = body.sawa9ly_password or None
 
     if body.password is not None:
       allowed, reason = Accounts.may_edit_user(admin, user)
@@ -161,6 +136,11 @@ class AdminUsersController:
 
     `can_be_managed` drives whether the UI offers Edit/Delete at all, so a
     non-super admin is not shown controls whose only outcome is a 403.
+
+    The sawa9ly and Telegram values are reported as facts and not as content:
+    an operator needs to know whether this account is set up, and has no business
+    holding the address or the chat it is bound to. The user set both, and can
+    see both, on their own profile.
     """
     return {
       "id": user.id,
@@ -169,7 +149,7 @@ class AdminUsersController:
       "is_admin": user.is_admin(),
       "can_be_managed": Role.is_manageable_in_dashboard(user.role),
       "has_sawa9ly_credentials": bool(user.sawa9ly_email and user.sawa9ly_password),
-      "sawa9ly_email": user.sawa9ly_email,
+      "telegram_chat_id": user.telegram.chat_id if user.telegram else None,
       "can_log_in": user.can_log_in(),
       "active_api_keys": sum(1 for key in user.api_keys if key.is_valid()),
       "clients": len(user.clients),

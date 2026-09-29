@@ -158,13 +158,20 @@ class Cron:
     """A lock file, held for the duration of a `with` block.
 
     Created exclusively so the OS decides who wins, rather than a check-then-write
-    that two processes can both pass. A lock older than `LOCK_STALE_SECONDS` is
-    taken over, because the alternative is a queue that never runs again after
-    one hard kill.
+    that two processes can both pass. A lock older than `stale_seconds` is taken
+    over, because the alternative is a queue that never runs again after one hard
+    kill.
+
+    Parameterised rather than hardcoded to the cron file so the Telegram listener
+    can use the same mechanism for the same reason — one process per something
+    that cannot have two — without a second copy of it. `stale_seconds` of 0
+    never takes over, which is right for a process someone started by hand.
     """
 
-    def __init__(self):
-      self.path = Cron._lock_path()
+    def __init__(self, path, stale_seconds, message):
+      self.path = path
+      self.stale_seconds = stale_seconds
+      self.message = message
       self.held = False
 
     def __enter__(self):
@@ -177,10 +184,7 @@ class Cron:
           if attempt == 1 and self._take_over_if_stale():
             continue
 
-          raise CronError(
-            f"Another pass is already running (lock: {self.path}). "
-            "If you are sure nothing is, delete that file."
-          )
+          raise CronError(self.message.format(path=self.path))
 
         with os.fdopen(handle, "w") as stream:
           stream.write(f"{os.getpid()} {datetime.now(timezone.utc).isoformat()}")
@@ -201,12 +205,23 @@ class Cron:
       return False
 
     def _take_over_if_stale(self):
+      """Whether to remove this lock and try again.
+
+      `stale_seconds` of 0 means **never** take over. That has to be said
+      explicitly rather than left to the comparison below: a lock written a
+      moment ago is already a fraction of a second old, so `age <= 0` is false
+      and the naive reading of it is "take over immediately" — which is the
+      exact opposite of what a caller asking for 0 wants.
+      """
+      if self.stale_seconds <= 0:
+        return False
+
       try:
         age = time.time() - self.path.stat().st_mtime
       except FileNotFoundError:
         return True
 
-      if age <= LOCK_STALE_SECONDS:
+      if age <= self.stale_seconds:
         return False
 
       Cron._say(f"removing a stale lock from {int(age)}s ago")
@@ -219,7 +234,12 @@ class Cron:
 
   @staticmethod
   def _lock():
-    return Cron._Lock()
+    return Cron._Lock(
+      Cron._lock_path(),
+      LOCK_STALE_SECONDS,
+      "Another pass is already running (lock: {path}). "
+      "If you are sure nothing is, delete that file.",
+    )
 
   # --- output ---------------------------------------------------------
 
@@ -251,6 +271,12 @@ class Cron:
         # worth reading but is not a broken pass.
         Cron._say(f"  ~ {name}: {message}")
 
+      # Notification failures are reported and deliberately kept out of `errors`,
+      # so `cron run` does not exit non-zero because one person muted a bot. The
+      # scan did its job; the message did not go out.
+      for message in result.get('notify_errors', []):
+        Cron._say(f"  ~ {name}: could not notify - {message}")
+
   @staticmethod
   def _counts(result):
     """A job's headline numbers, leaving out the ones it has nothing in.
@@ -266,7 +292,7 @@ class Cron:
 
     parts += [
       f"{key} {result[key]}"
-      for key in ('changed', 'unchanged', 'skipped', 'trackers', 'clients')
+      for key in ('changed', 'unchanged', 'skipped', 'notified', 'trackers', 'clients')
       if result.get(key)
     ]
 

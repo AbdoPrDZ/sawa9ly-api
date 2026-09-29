@@ -223,6 +223,55 @@ class Config:
         f"{cls.CRON_DELAY_VAR} must be a number of seconds, got {raw!r}"
       ) from None
 
+  # --- telegram -------------------------------------------------------
+
+  TELEGRAM_BOT_TOKEN_VAR = "TELEGRAM_BOT_TOKEN"
+  """The bot's token from @BotFather. Optional: without it the Telegram
+    integration is simply off, and nothing else in the project needs it."""
+
+  TELEGRAM_BOT_NAME_VAR = "TELEGRAM_BOT_NAME"
+  """The bot's @username, for building a `t.me` link.
+
+    A fallback only. The real name comes from `getMe`, which reads it off the
+    token itself, so a link can never name a bot the token does not belong to.
+    This exists for the case where Telegram cannot be reached to ask."""
+
+  #: How long a binding code stays usable. Short on purpose: it is a bearer
+  #: credential, and whoever sends it first gets the binding.
+  TELEGRAM_CODE_TTL_SECONDS = 15 * 60
+
+  #: Seconds a `telegram listen` poll waits for updates before returning. 30
+  #: keeps each request short enough that a second poller cannot hold the
+  #: connection open long enough to look like the only one.
+  TELEGRAM_POLL_TIMEOUT = 30
+
+  #: Back-off after Telegram's 409, which it returns when a token is polled
+  #: twice. Telegram appears to keep per-token poll state for a while after a
+  #: poller exits, so a restart can hit this for up to a minute even when only
+  #: one process is running.
+  TELEGRAM_CONFLICT_BACKOFF = 30
+
+  @classmethod
+  def telegram_token(cls):
+    return os.getenv(cls.TELEGRAM_BOT_TOKEN_VAR) or None
+
+  @classmethod
+  def telegram_bot_name(cls):
+    """The bot's @username, without the leading `@`."""
+    name = os.getenv(cls.TELEGRAM_BOT_NAME_VAR) or ""
+
+    return name.lstrip("@").strip() or None
+
+  @classmethod
+  def telegram_configured(cls):
+    """Whether a bot token is available.
+
+    Checked rather than assumed, so every entry point can refuse with something
+    actionable — "set TELEGRAM_BOT_TOKEN" — instead of failing on a None token
+    somewhere inside an HTTP call.
+    """
+    return bool(cls.telegram_token())
+
   # --- parsing --------------------------------------------------------
 
   @classmethod

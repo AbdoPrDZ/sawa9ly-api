@@ -21,6 +21,7 @@ src/
     catalogue.ts          listProducts, getProduct, saveProduct
     orders.ts             listOrders, getOrder
     trackers.ts            listTrackers, watch, unwatch
+    telegram.ts           getBinding, issueLink, unbind
     users.ts               listUsers, createUser, updateUser, deleteUser
     keys.ts                listKeys, createKey, revokeKey
     clients.ts             listClients, createClient
@@ -37,6 +38,7 @@ src/
     keys/                  IssueKeyModal, RevokeKeyModal, RevealKeyModal
     clients/               CreateClientModal
     pages/                 CreatePageModal, EditPageModal
+    telegram/              TelegramCard
   pages/                   Login, Users, ApiKeys, Profile, Products,
                             ProductDetail, Orders, OrderDetail, Clients, Pages
 ```
@@ -213,6 +215,18 @@ The profile page is the self-service surface: the dashboard password, the
 sawa9ly email and password, and a **Log in to sawa9ly** button that creates or
 refreshes that account's site session. The button is disabled until the account
 has both site credentials, and the page shows whether a stored session exists.
+
+It also holds `TelegramCard`, the only place a user links a Telegram chat. The
+link is fetched from `POST /api/v1/telegram/link` and shown **once**, because the
+code in it is stored only as a hash — the same contract `RevealKeyModal` follows.
+The card says plainly that nothing happens until `python main.py telegram listen`
+is running, because that is the failure a user cannot diagnose from the page.
+
+A user's own sawa9ly and Telegram settings are here and **nowhere else**: the
+create and edit user modals do not render the sawa9ly fields at all, and the
+`AdminUser` shape has no `sawa9ly_email`. The users table shows
+`has_sawa9ly_credentials` as "set"/"not set" and `telegram_chat_id`, which is the
+fact an operator needs and not the value.
 
 ## Products
 

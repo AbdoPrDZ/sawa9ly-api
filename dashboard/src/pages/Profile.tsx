@@ -6,11 +6,14 @@ import { Banner } from '../components/Banner'
 import { Field } from '../components/Field'
 import { RoleBadge } from '../components/RoleBadge'
 import { Spinner } from '../components/Spinner'
+import { TelegramCard } from '../features/telegram/TelegramCard'
 
 /** A user's own account.
-
+ *
  * Available to every signed-in user, whatever their role: changing your own
- * password or your own sawa9ly credentials should never need an administrator.
+ * password, your own sawa9ly credentials or your own Telegram chat should never
+ * need an administrator. Nobody can set these for you, which is why they are all
+ * on this page and none of them are on anyone else's.
  */
 export function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -175,6 +178,8 @@ export function ProfilePage() {
             </button>
           </div>
         </form>
+
+        <TelegramCard />
       </div>
     </section>
   )

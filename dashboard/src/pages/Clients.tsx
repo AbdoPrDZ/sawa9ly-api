@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { isUnauthorized } from '../api/client'
 import { createClient, listClients } from '../api/clients'
 import type { Client, NewClient } from '../api/types'
+import { AdminOnly } from '../components/AdminOnly'
 import { Banner } from '../components/Banner'
 import { Spinner } from '../components/Spinner'
 import { CreateClientModal } from '../features/clients/CreateClientModal'
@@ -71,10 +72,15 @@ export function Clients() {
       {!clients ? (
         <Spinner label="Loading recipients" />
       ) : clients.length === 0 ? (
-        <p className="muted">
-          None yet. Add one above, or from the command line:{' '}
-          <code>python main.py client add &quot;Full name&quot; --user &lt;name&gt;</code>.
-        </p>
+        <>
+          <p className="muted">None yet. Add one above.</p>
+          <AdminOnly>
+            <p className="muted">
+              Or from the command line:{' '}
+              <code>python main.py client add &quot;Full name&quot; --user &lt;name&gt;</code>.
+            </p>
+          </AdminOnly>
+        </>
       ) : (
         <table>
           <thead>

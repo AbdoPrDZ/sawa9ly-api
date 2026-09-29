@@ -52,10 +52,18 @@ test can change the environment and re-read.
 | Logging | `LOG_LEVEL`, `LOG_FILE`, `LOG_FORMAT` | `WARNING`, console, text |
 | Super admin | `SUPER_ADMIN_USERNAME`, `SUPER_ADMIN_PASSWORD` | none — both required |
 | Dashboard | `DASHBOARD_SECRET` | generated once, stored in the database |
+| Tracking queue | `CRON_INTERVAL`, `CRON_DELAY` | 300s, 1.0s |
+| Telegram | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_NAME` | none — the integration is off when unset |
 
 `DATABASE_URL` wins over the discrete `DB_*` variables. Credentials are
 URL-encoded when a URL is assembled from parts, because a password containing
 `@` or `/` would otherwise parse into the wrong place.
+
+`TELEGRAM_BOT_TOKEN` is a **credential** and the one most likely to leak: the Bot
+API puts it in the URL of every call, so `requests` quotes it in error messages.
+`TELEGRAM_BOT_NAME` is a fallback only — the bot's real name is read from the token
+with `getMe`, so a link cannot name a bot the token does not belong to. See
+`domains/telegram.md`.
 
 ## The default user is the super admin
 

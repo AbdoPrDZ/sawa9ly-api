@@ -31,10 +31,20 @@ def parse_cookie(cookie_string):
 
 
 # Imported after the definitions above on purpose: livewire and selector read
-# BASE_URL / parse_cookie from this package, so importing them at the top of
-# the file would be a circular import.
+# BASE_URL / parse_cookie from this package, so importing them at the top of the
+# file would be a circular import.
 from .livewire import Livewire, LivewireError  # noqa: E402
 from .selector import Selector  # noqa: E402
+from .telegram import Telegram, TelegramError  # noqa: E402
 
 
-__all__ = ["BASE_URL", "COOKIE_DOMAIN", "Livewire", "LivewireError", "Selector", "parse_cookie"]
+__all__ = [
+  "BASE_URL",
+  "COOKIE_DOMAIN",
+  "Livewire",
+  "LivewireError",
+  "Selector",
+  "Telegram",
+  "TelegramError",
+  "parse_cookie",
+]

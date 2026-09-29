@@ -15,6 +15,24 @@ def utcnow():
   return datetime.now(timezone.utc)
 
 
+def as_utc(value):
+  """A datetime read back from the database, as the aware UTC it was written as.
+
+  The columns are plain `DateTime`, and SQLite keeps no timezone at all, so every
+  value that comes back is naive — while `utcnow()` is aware. Comparing the two
+  directly raises `can't compare offset-naive and offset-aware datetimes`, so
+  anything read from a column and compared to now has to come through here.
+
+  It is UTC by construction: the only thing that writes these columns is
+  `utcnow`. Assuming otherwise would be the bug, so a naive value is taken to be
+  UTC rather than local time.
+  """
+  if value is None or value.tzinfo is not None:
+    return value
+
+  return value.replace(tzinfo=timezone.utc)
+
+
 def database_url():
   """The database URL, resolved from the environment.
 

@@ -33,8 +33,12 @@ export interface AdminUser {
   is_admin: boolean
   /** False for a `super`: the dashboard may not change or delete it. */
   can_be_managed: boolean
-  sawa9ly_email: string | null
+  /** Whether this user has set their own sawa9ly credentials. An admin sees the
+   *  fact and not the address: they own it, and set it from their profile. */
   has_sawa9ly_credentials: boolean
+  /** Which chat their notifications go to, or null. Not a credential — it is
+   *  here so a super can tell somebody which chat they linked. */
+  telegram_chat_id: string | null
   can_log_in: boolean
   active_api_keys: number
   clients: number
@@ -59,6 +63,32 @@ export interface Sawa9lyLoginResult {
   username: string
   message: string
   has_session: boolean
+}
+
+/** The signed-in user's link to a Telegram chat. */
+export interface TelegramBinding {
+  user_id: number
+  bound: boolean
+  chat_id: string | null
+  chat_type: string | null
+  chat_title: string | null
+  chat_username: string | null
+  /** True while a code is outstanding, so the page can say "waiting for you to
+   *  open the link" rather than showing nothing. */
+  code_pending: boolean
+  code_expires_at: string | null
+  verified_at: string | null
+  created_at: string | null
+}
+
+/** A freshly issued binding link. The code is in the clear here and nowhere
+ *  else: only its hash is stored, so this response is the only time it can be
+ *  read. */
+export interface TelegramLink {
+  username: string
+  url: string
+  code: string
+  expires_at: string | null
 }
 
 /** A saved catalogue product. */
@@ -200,8 +230,9 @@ export interface PageEdits {
 /** The editable part of a user. Every field is optional: absent means unchanged. */
 export interface UserEdits {
   role?: Role
-  sawa9ly_email?: string
-  sawa9ly_password?: string
+  /** The dashboard login password. Deliberately the only thing an admin may set
+   *  — a user sets their own sawa9ly credentials, and an admin who could type
+   *  them in could act as that user on the site. */
   password?: string
 }
 

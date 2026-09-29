@@ -21,7 +21,8 @@ dependencies read it: `get_current_user` accepts **only** an API key, and
 `get_any_user` accepts either, token first.
 
 `get_any_user` is for the resources a machine and the dashboard both need — today
-`/api/v1/trackers`, `/api/v1/orders`, `/api/v1/clients` and `/api/v1/pages`.
+`/api/v1/trackers`, `/api/v1/orders`, `/api/v1/clients`, `/api/v1/pages` and
+`/api/v1/telegram`.
 Widening to a token is only safe on a route that scopes by `order.user_id`,
 `client.user_id` or `page.user_id` in the database; it must never be used on a
 route where the credential is the only thing standing between the caller and
@@ -128,15 +129,24 @@ demote or delete the account above them, so a super is only manageable through
 
 | role | may do |
 | --- | --- |
-| `super` | everything in the dashboard, including editing and deleting any user and setting their sawa9ly credentials |
+| `super` | edit and delete any user, and see who has set up their account |
 | `admin` | add users, list users, manage API keys, and manage **their own** profile. Nothing else |
 | `user` | manage their own profile only |
 
-An administrator's power is deliberately narrow. They can create an account, and
-that account starts with **no** site credentials — setting another user's
-sawa9ly email or password is super-only, and a non-super is refused with a 403.
-The user then sets their own from the profile page, so the credential always
-comes from the person who owns it.
+An administrator's power is deliberately narrow: create an account and set the
+dashboard password to reach it with. That is all.
+
+**No role may set another user's sawa9ly credentials.** Not a super, not through
+the API, not through the dashboard. The fields are not on `AdminUserIn` at all, so
+there is nothing to authorise — `Accounts.may_set_site_credentials` was removed
+rather than left as a door nothing opens. The user sets their own from
+`/api/auth/me/profile`, so the credential always comes from the person who owns
+it, and an admin who could type it in could also act as that user on the site.
+
+What an admin *can* see is the **fact** that a user is set up —
+`has_sawa9ly_credentials`, and `telegram_chat_id` — not the value. That is enough
+to answer "why is this account not syncing?" without the admin holding somebody
+else's address or chat.
 
 The whole matrix is in `src/services/accounts.py` as `may_*` methods returning
 `(allowed, reason)`. Two reasons that pattern exists:
@@ -150,6 +160,11 @@ Self-service is separate from administration on purpose: `/api/auth/me/profile` 
 open to any signed-in user, and `/api/admin/users/{id}` is super-only. A user
 changing their own password never needs an administrator, and an administrator
 has no business changing it for them.
+
+The CLI's `user add --email --password` still exists, and is the one remaining way
+credentials are set by anyone but their owner. It is the operator's own bootstrap
+path on a machine where the user cannot yet sign in, so it was left alone when the
+dashboard path was removed. Say so if that is wrong.
 
 ## Sawa9ly credentials
 

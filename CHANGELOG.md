@@ -11,7 +11,7 @@ file, so there is no second place to update.
 
 ## [Unreleased]
 
-### Added
+### Added — landing pages, order state, and the `/api` namespace
 
 - **Landing pages.** A user can write an HTML page per product and publish it at
   `/pages/{public_id}`. `LandingPage` and `PageState` are the entity, a page
@@ -50,29 +50,6 @@ file, so there is no second place to update.
   disagreement rather than guessed at, because `cancelled` is terminal and a wrong
   read could not be undone by running the pass again. An order with no
   `origin_id` is skipped: there is no page to read.
-
-### Fixed
-
-- **`_origin_id` reads the shape the site actually returns.** The submit does not
-  hand back a number; it returns a serialised Eloquent model, a list whose second
-  element is `{'class': 'App\\Models\\Order', 'key': 879988, 's': 'mdl'}`, and the
-  id is its `key`. The old code did `str()` on that list, so `reference` held a
-  Python repr of a PHP array. The value is now searched for rather than assumed,
-  `reference` holds a clean `879988`, and an unrecognised shape yields no id at
-  all — a wrong id would be stored and then used to ask the site about an order
-  that is not this one.
-- **`Cron._report` no longer reports one job by name.** It was hardcoded to
-  `tracking`, so the pass line could not have mentioned the orders job even once
-  there was one. It now reports whatever the queue is running, and prints
-  disagreements under `~` so they are distinguishable from errors.
-- **`OrderStateBadge` cannot render a `cancelled` order as `done`.** It fell
-  through to the `done` badge for any state it did not recognise, so a cancelled
-  order would have been drawn as a successful one. It is a lookup keyed by state
-  now, and the CLI takes its `state` choices from `OrderState.ALL` rather than a
-  hand-written list that had already drifted out of step with the model.
-
-### Changed
-
 - **Every route moved under `/api`.** This breaks any existing client:
   `/v1/products` is now `/api/v1/products`, `/auth/login` is now
   `/api/auth/login`, `/admin/users` is now `/api/admin/users`, and `/health` and
@@ -83,11 +60,191 @@ file, so there is no second place to update.
   is and keeps its `node_modules` and `dist` in one obvious place. It is still
   served from `dashboard/dist` and still mounted at `/dashboard`.
 
+### Added — Telegram notifications
+
+- **Telegram notifications, and linking a user to a chat.** A user issues a
+  single-use code from their profile, opens the `t.me` link carrying it, and
+  `python main.py telegram listen` records the chat against their account. The
+  code is 10 characters, valid 15 minutes, and stored only as a SHA-256 digest,
+  so it is shown once and cannot be read back out of the database.
+
+  The code is what makes the binding mean anything: a Telegram chat id is a
+  number the API hands out and anyone can read off a screenshot, whereas a code
+  proves both that the sender can post in that chat and that they were allowed to
+  claim that account. It travels as a deep link rather than being typed, so
+  nothing can be mistyped and it is never exposed in a group chat.
+
+  A private chat with the bot needs no setup. A private channel works too, with
+  the bot added as an admin; **a group is refused**, and the rule is in the
+  database rather than only in the UI. One chat belongs to one account via
+  `UNIQUE(chat_id)`, so two users cannot claim the same channel, and issuing a new
+  link never unlinks the chat a user already had.
+
+  Updates are received by **long polling, not a webhook**, so this needs no public
+  address, no certificate and no domain — it dials Telegram and Telegram never
+  dials back. Telegram holds undelivered updates for 24 hours, so a code sent while
+  the listener was down is delivered when it next starts. Only one listener may
+  poll a token, enforced by `data/telegram.lock`, because Telegram's answer to a
+  second poller is a 409 on every poll and that reads like a network fault rather
+  than what it is.
+
+  Optional throughout: with no `TELEGRAM_BOT_TOKEN` set the whole integration is
+  off and nothing else changes.
+
+- `python main.py telegram test [--user]`, which sends a test message to a linked
+  chat, and `POST /api/v1/telegram/test` with a **Send a test message** button on
+  the dashboard's Telegram card. It is how a link is checked without opening a
+  terminal, and it exits non-zero when it cannot send, so it is usable as a check
+  in a script. 404 when no chat is linked, 502 when Telegram itself refuses.
+  `TelegramService.send_to_user` is the one place a message goes to a user.
+- `telegram_chat_id` in the admin users view, so a super can tell somebody which
+  chat they linked.
+
+### Added — notifications
+
+- **A notification when a watched product changes.** The queue already diffed each
+  scrape against the stored row, so the previous value was already in hand. A
+  change to `available` or to `price` now raises a notification for everyone
+  watching that product.
+
+  A notification is a **record**, not a call, and it holds no recipient: one
+  change is one `notifications` row however many people watch the product, and the
+  fan-out is a row per person in `notification_deliveries` under a
+  `UNIQUE(notification_id, user_id)`. That is what stops one event becoming one
+  message per watcher, and it is what lets a send that failed for one person be
+  retried without resending to everybody it already reached. Creating the row
+  *is* the sending.
+
+  **One message per product per fetch, however many fields moved.** A scrape that
+  finds the price and the stock both different is one thing that happened once; an
+  earlier version raised one event per field and sent two messages about a single
+  change, which is the sort of thing that gets a bot muted. Each change now gets
+  its own line inside one message. The kind is `product.changed` — one kind for
+  the event, not one per field, because "which fields moved" belongs in the body
+  where a reader wants it.
+
+  A **price** change is compared on the **numbers** the two display texts parse
+  to, never on the text: the site may print `16,000 دج` one minute and
+  `16.000 دج` the next, and diffing the raw string would put a message in
+  somebody's chat about a comma. Each line says which way it moved and from what,
+  because a new number with no "was" beside it is not news anybody can act on. A
+  price appearing or disappearing — "sur demande" and back — is its own case
+  rather than a silent null.
+
+  Which tracked fields are worth a message is `NOTIFIABLE_FIELDS` in
+  `src/services/notifications.py`, written out and not derived: a title or
+  description change is recorded in the diff and reported by the pass, but whether
+  that is worth interrupting somebody for is a judgement this code should not make
+  on its own.
+
+  Every outcome is kept. A chat that was blocked is a delivery with
+  `send_error` set and `sent_at` null, and a user with no linked chat is a
+  delivery saying so — never a silent gap. A delivery failure is reported in the
+  pass's `notify_errors` and deliberately **not** in `errors`, so `cron run` does
+  not exit non-zero because one person muted a bot: the scan did its job, and a
+  queue that cries wolf trains you to ignore its exit code.
+
+  Retry is bounded twice, both because a notification is only true for as long as
+  it was noticed: by age (an hour, so a chat unblocked over lunch still gets it),
+  and by cause — a delivery that found no linked chat is not retried at all,
+  because that user had not opted in when the event happened.
+
+### Fixed
+
+- **A pasted code was checked leniently and then hashed strictly.** The code
+  matcher stripped quotes, backticks and spaces to decide whether a message held
+  a code, but handed back the original text — so a user who copied theirs out of
+  a backticked page was told their code was unknown while looking at it. The
+  matcher now returns the cleaned code or None, and `hash_code` normalises too, so
+  the thing that decides and the thing that hands it on cannot disagree.
+  Backticks, quotes, stray spaces, lowercase and a stray hyphen all work now; a
+  sentence containing a code is still refused, because stripping the words out
+  would leave a 10-character match for the wrong reason.
+- **The dashboard pointed at the one button that cannot work.** The page a
+  `t.me` link opens has two: "Start Bot", which hands off to Telegram's app via the
+  `tg://` scheme and silently does nothing on a computer with no app installed,
+  and "Open in Web", which carries the same code in a `tgaddr` fragment and works
+  with none. The instruction named the second rather than saying "open this link",
+  and still offers the code as a message for the same reason.
+- **The bot asked to be sent the link.** `/start` with no code replied "Send me
+  the link from your dashboard", which is wrong — a bot cannot do anything with a
+  `t.me` URL. It now asks for the 10-character code, which is also what makes the
+  no-app-installed case recoverable.
+- `Cron._Lock` gained a path, a staleness and a message so the Telegram listener
+  could reuse it. A staleness of 0 was meant to mean "never take over" but
+  `age <= 0` is false for a lock written a moment ago, so a second listener was
+  let in. Zero now means never, explicitly.
+- **Comparing a stored timestamp to `utcnow()` raised.** The columns are plain
+  `DateTime` and SQLite keeps no timezone, so every value read back is naive while
+  `utcnow()` is aware, and the comparison raises rather than answering. This had
+  already bitten the Telegram code once and been patched privately there; the
+  fix now lives in `src/db.py` as `as_utc`, next to `utcnow`, because every
+  column in this project has the same problem.
+
+### Changed
+
+- **No role can set another user's sawa9ly credentials any more, including a
+  super.** This is a breaking change to the API: `sawa9ly_email` and
+  `sawa9ly_password` are gone from `AdminUserIn`, and
+  `POST`/`PATCH /api/admin/users*` no longer accept them. `sawa9ly_email` is also
+  gone from `AdminUserOut` — an admin can see that a user is set up, not the
+  address they used. The fields are the user's own, entered on their profile, and
+  an admin who could type them in could also act as that user on sawa9ly.
+  `Accounts.may_set_site_credentials` was removed rather than left as a door
+  nothing opens. The CLI's `user add --email --password` is unchanged and remains
+  the operator's bootstrap path.
+
+  The dashboard's create and edit user forms no longer render the sawa9ly fields
+  at any role, and the users table shows "set" / "not set" in place of the email.
+
+### Fixed
+
+- `_origin_id` reads the shape the site actually returns. The submit does not
+  hand back a number; it returns a serialised Eloquent model, a list whose second
+  element is `{'class': 'App\\Models\\Order', 'key': 879988, 's': 'mdl'}`, and the
+  id is its `key`. The old code did `str()` on that list, so `reference` held a
+  Python repr of a PHP array. The value is now searched for rather than assumed,
+  `reference` holds a clean `879988`, and an unrecognised shape yields no id at
+  all — a wrong id would be stored and then used to ask the site about an order
+  that is not this one.
+- `Cron._report` no longer reports one job by name. It was hardcoded to
+  `tracking`, so the pass line could not have mentioned the orders job even once
+  there was one. It now reports whatever the queue is running, and prints
+  disagreements under `~` so they are distinguishable from errors.
+- `OrderStateBadge` cannot render a `cancelled` order as `done`. It fell through
+  to the `done` badge for any state it did not recognise, so a cancelled order
+  would have been drawn as a successful one. It is a lookup keyed by state now,
+  and the CLI takes its `state` choices from `OrderState.ALL` rather than a
+  hand-written list that had already drifted out of step with the model.
+- `API_GUIDE.md` documented routes that no longer exist. Every path in it predated
+  the `/api` namespace, so all twelve references would have produced a 404. The
+  versioning section now explains both prefixes and why `/dashboard` and
+  `/pages/{public_id}` sit outside `/api`.
+- A 404 from the catalogue named a path that no longer existed. It now names the
+  action instead, since any absolute path written into a message is one that can
+  go stale.
+- `Cron._Lock` is parameterised by path, staleness and message, so the Telegram
+  listener reuses it instead of carrying a second copy. The queue's own behaviour
+  is unchanged.
+
+### Security
+
+- The Telegram bot token is a standing leak risk: the Bot API puts it in the URL
+  of every call, and `requests`/`urllib3` quote that URL in their errors. The
+  project's `SecretFilter` does not cover it — it redacts a record only when the
+  message contains a word like `token` or `secret`, and a real token contains
+  neither, and it only clears `record.args` so a token interpolated into
+  `record.msg` survives. `src/utils/telegram.py` therefore keeps the token in one
+  private attribute, strips it from everything leaving the module, and has a
+  `__repr__` that cannot leak it. Verified against the real error paths.
+
 ### Documentation
 
 - The README's project layout, the order state machine, the checkout description
   and the queue section were all describing the previous behaviour. The queue
-  section now names both jobs and says what the orders job will and will not do.
+  section now names both jobs and says what the orders job will and will not do,
+  and a new section covers linking a chat, the listener, and why no ngrok,
+  DDNS or domain is needed.
 
 ## [1.3.0] - 2026-09-27
 

@@ -95,6 +95,14 @@ class User(Base):
   landing_pages: Mapped[list["LandingPage"]] = relationship(
     back_populates="user", cascade="all, delete-orphan", lazy="selectin",
   )
+  # One row per user, so this is a single object and not a list. `uselist=False`
+  # is what tells SQLAlchemy that; without it every read of it is a list.
+  telegram: Mapped["TelegramBinding | None"] = relationship(
+    back_populates="user", cascade="all, delete-orphan", lazy="selectin", uselist=False,
+  )
+  notifications: Mapped[list["NotificationDelivery"]] = relationship(
+    back_populates="user", cascade="all, delete-orphan", lazy="selectin",
+  )
 
   # --- lookups ------------------------------------------------------
 

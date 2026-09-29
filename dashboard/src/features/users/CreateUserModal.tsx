@@ -6,24 +6,21 @@ import { Modal } from '../../components/Modal'
 
 /** Creates a user.
  *
- * The sawa9ly fields are only rendered for a super: an ordinary administrator
- * adds a user who then sets their own site credentials from their profile. The
- * server refuses those fields for a non-super regardless, so hiding them here is
- * about not offering something that will be rejected.
+ * There is no sawa9ly field, and not by role: no admin sets another user's site
+ * credentials at all. They are the user's own to enter, from their profile, and
+ * an admin who could type them in could also act as that user on sawa9ly. An
+ * administrator's job here is the account and the password to reach it with.
  */
 export function CreateUserModal({
-  canSetSiteCredentials,
   onCancel,
   onSubmit,
 }: {
-  canSetSiteCredentials: boolean
   onCancel(): void
   onSubmit(input: NewUser): Promise<void>
 }) {
   const [username, setUsername] = useState('')
   const [role, setRole] = useState<Role>('user')
   const [password, setPassword] = useState('')
-  const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function submit(event: FormEvent) {
@@ -35,7 +32,6 @@ export function CreateUserModal({
         username,
         role,
         password: password || undefined,
-        sawa9ly_email: canSetSiteCredentials && email ? email : undefined,
       })
     } finally {
       setBusy(false)
@@ -70,22 +66,10 @@ export function CreateUserModal({
           />
         </Field>
 
-        <Field
-          label="Sawa9ly email"
-          hint={
-            canSetSiteCredentials
-              ? 'Optional. The user can also set this from their profile.'
-              : undefined
-          }
-        >
-          {canSetSiteCredentials ? (
-            <input value={email} onChange={(event) => setEmail(event.target.value)} />
-          ) : (
-            <p className="muted">
-              The new user sets their own sawa9ly email and password from their profile.
-            </p>
-          )}
-        </Field>
+        <p className="muted">
+          The new user sets their own sawa9ly email, sawa9ly password and Telegram
+          chat from their profile.
+        </p>
 
         <div className="modal-actions">
           <button type="button" className="ghost" onClick={onCancel}>
