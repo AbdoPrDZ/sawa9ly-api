@@ -74,7 +74,7 @@ reading another.
 | Sawa9ly session | site, mirrored in `settings` | The site is the source of truth; the row is a cache that is re-established by logging in. |
 | Cart contents and quantities | site | Never mirrored. Read it, do not assume it. |
 | Cart prices | site, in-memory only | Livewire component state; gone on any reload. |
-| Catalogue, clients, orders | `data/sawa9ly.db` | The local mirror. Authoritative for our own workflow. |
+| Catalogue, clients, orders | `database/sawa9ly.db` | The local mirror. Authoritative for our own workflow. |
 | Parsed page | the `Selector` instance | Cached until `refresh()`. A stale document is the usual cause of "the value did not change". |
 | Livewire clients | process memory (`client_cache`) | Rebuilt on restart; harmless, since a client can always log in again. |
 

@@ -5,3 +5,11 @@ sqlalchemy
 fastapi
 uvicorn[standard]
 tabulate
+
+# PostgreSQL, for a deployment that is not SQLite in a file. `binary` bundles
+# libpq into the wheel, so the image needs no system postgres client library -
+# which is most of the reason the slim base image is usable.
+#
+# Unpinned, like everything above, so this file stays a list of what the project
+# needs rather than a lockfile that goes stale.
+psycopg[binary]

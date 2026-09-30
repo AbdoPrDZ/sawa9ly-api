@@ -1,0 +1,21 @@
+#!/bin/sh
+# The CLI, under a name worth typing into `docker exec`.
+#
+#   docker exec <container> sawa9ly-api user list
+#   docker exec <container> sawa9ly-api product show 5663
+#   docker exec <container> sawa9ly-api cron run
+#
+# `exec` so that the exit status is the CLI's own and not this script's. That is
+# not a detail: `cron run` reports a failed pass through its exit code so a
+# scheduler can act on it, and a wrapper that turned every failure into success
+# would report a broken queue as a healthy one.
+#
+# `python -m sawa9ly` rather than `python /app/main.py`, so it does not depend on
+# the working directory. `docker exec` uses the image's WORKDIR, but `-w` overrides
+# that, and a command that only works from one directory fails in a way that looks
+# like a bug in the command.
+#
+# There is no argument handling of its own. Anything this accepted and ignored
+# would be a command that appeared to work and did nothing.
+
+exec python -m sawa9ly "$@"

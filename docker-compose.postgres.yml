@@ -1,0 +1,118 @@
+# =============================================================================
+# Profile: postgres
+#
+#   cp .env.docker.example .env.docker    # then set the two passwords
+#   docker compose --env-file .env.docker -f docker-compose.postgres.yml up -d --build
+#
+# `--env-file .env.docker` is required, not decoration. A service's `env_file:`
+# puts variables *into a container*, while `${...}` reads variables *from the shell
+# or from the file named by --env-file*. The two never overlap, so a value in
+# `.env.docker` is invisible to the interpolation below unless --env-file says so -
+# and the failure looks like the variable being unset rather than merely unread,
+# which is a genuinely confusing way to lose an afternoon.
+#
+# The same three containers as the sqlite profile, against a real database
+# server. Use this one whenever the deployment is not a single machine you are
+# experimenting on: the database outlives the containers that use it, several
+# writers stop being a question, and a backup is a thing postgres already knows
+# how to take.
+#
+# The database connection is given to the application as the discrete DB_*
+# variables rather than as one DATABASE_URL, on purpose. Config url-quotes a
+# password assembled from those parts, and a DATABASE_URL is taken verbatim - so
+# a password containing `@`, `/` or `:` works under the first and silently
+# connects to the wrong host under the second.
+#
+# `DB_PASSWORD` is the only database password you write. The postgres image
+# insists on the name POSTGRES_PASSWORD, and the three lines under `postgres`
+# translate one into the other, so the value exists once.
+# =============================================================================
+
+name: sawa9ly-postgres
+
+# Everything the three processes have in common. The differences between them
+# are a command and a published port, nothing else.
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: sawa9ly-api:latest
+  restart: unless-stopped
+  env_file:
+    - path: .env.docker
+      required: false
+  environment:
+    SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-admin}
+    SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?set SUPER_ADMIN_PASSWORD in .env.docker, and pass --env-file .env.docker so compose can read it}
+    # Discrete parts rather than one DATABASE_URL, so the password is url-quoted:
+    # see the note at the top.
+    DB_DRIVER: postgresql
+    DB_HOST: postgres
+    DB_PORT: "5432"
+    DB_NAME: ${DB_NAME:-sawa9ly}
+    DB_USER: ${DB_USER:-sawa9ly}
+    DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env.docker, and pass --env-file .env.docker so compose can read it}
+  # No volume here at all. The database is postgres's own, below, and the logs
+  # are deliberately not persisted: each of these three containers has its own
+  # `docker logs`, which is one stream per process and already carries the same
+  # lines as the per-subsystem files inside the container. Persisting those files
+  # too would mean a second copy to rotate and delete, with nothing in it the
+  # streams do not already have. Nor do the lock files get a volume; they are in
+  # /tmp inside each container, which is where a lock belongs.
+  depends_on:
+    postgres:
+      # Ready, not merely started. Without this the application races the
+      # database on first boot and crashes, and `restart: unless-stopped` turns
+      # that into a restart loop that looks like a configuration error.
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    # The image insists on the names POSTGRES_DB/USER/PASSWORD, while the
+    # application reads DB_NAME/DB_USER/DB_PASSWORD - two fixed vocabularies, so
+    # something has to translate. These three lines are that translation, and they
+    # are why the password is written once in `.env.docker` rather than twice.
+    environment:
+      POSTGRES_DB: ${DB_NAME:-sawa9ly}
+      POSTGRES_USER: ${DB_USER:-sawa9ly}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env.docker, and pass --env-file .env.docker so compose can read it}
+      # Unremarkable for a single database, and the reason a plain `pg_isready`
+      # below is trustworthy within seconds.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - sawa9ly-postgres:/var/lib/postgresql/data
+    healthcheck:
+      # Checks the actual database and user, not just that a process is up.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sawa9ly} -d ${DB_NAME:-sawa9ly}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  serve:
+    <<: *app
+    command: ["python", "main.py", "serve"]
+    ports:
+      # The host's loopback, not every interface. This is an admin surface with
+      # real API keys behind it; publishing it to the network is a decision
+      # someone should make deliberately, not a default someone inherits.
+      - "127.0.0.1:${API_PUBLISHED_PORT:-8000}:${API_PORT:-8000}"
+
+  telegram:
+    <<: *app
+    command: ["python", "main.py", "telegram", "listen"]
+    # Serves nothing over HTTP, so the image's HTTP health check would only ever
+    # report this container unhealthy.
+    healthcheck:
+      disable: true
+
+  cron:
+    <<: *app
+    command: ["python", "main.py", "cron", "listen"]
+    healthcheck:
+      disable: true
+
+volumes:
+  sawa9ly-postgres:

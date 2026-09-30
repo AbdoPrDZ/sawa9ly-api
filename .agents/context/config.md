@@ -47,9 +47,10 @@ test can change the environment and re-read.
 
 | Group | Variables | Default |
 | --- | --- | --- |
-| Database | `DATABASE_URL`, or `SQLITE_FILE`; or `DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | SQLite at `data/sawa9ly.db` |
+| Database | `DATABASE_URL`, or `SQLITE_FILE`; or `DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | SQLite at `database/sawa9ly.db` |
 | HTTP server | `API_HOST`, `API_PORT`, `API_RELOAD` | `127.0.0.1:8000`, reload off |
-| Logging | `LOG_LEVEL`, `LOG_DIR`, `LOG_FILE`, `LOG_FORMAT` | `INFO`, `data/logs`, five files, text |
+| Locations | `DATABASE_DIR`, `DATA_DIR`, `LOG_DIR`, `LOCK_DIR` | `database`, `data`, `logs`, and `DATA_DIR` for the locks |
+| Logging | `LOG_LEVEL`, `LOG_FILE`, `LOG_FORMAT` | `INFO`, five files, text |
 | Super admin | `SUPER_ADMIN_USERNAME`, `SUPER_ADMIN_PASSWORD` | none — both required |
 | Dashboard | `DASHBOARD_SECRET` | generated once, stored in the database |
 | Tracking queue | `CRON_INTERVAL`, `CRON_DELAY` | 300s, 1.0s |
@@ -92,6 +93,44 @@ receives a concrete name and none of them knows the fallback exists.
 `bool(os.getenv(...))` is wrong — it makes the string `"false"` true. `Config`
 recognises `1/true/yes/on` and treats everything else as false.
 
+## Three directories, and why they are three
+
+The application writes to three places, deliberately separate, because they are
+wanted on different terms — backing up one should not mean keeping the others.
+
+| Directory | Holds | Set by |
+| --- | --- | --- |
+| `database/` | `sawa9ly.db` | `DATABASE_DIR` |
+| `data/` | the lock files | `DATA_DIR` |
+| `logs/` | the five log files | `LOG_DIR` |
+
+`LOCK_DIR` has no default of its own and falls back to `DATA_DIR`, so a
+deployment that sets only `DATA_DIR` stays self-consistent.
+
+`Config.data_dir()`, `database_dir()`, `lock_dir()` and `log_dir()` are
+**classmethods, not class attributes**, and all four go through `Config._resolve`,
+which leaves an absolute path alone and resolves a relative one against
+`PROJECT_ROOT`. Two reasons, both load-bearing:
+
+- Reading the environment at import time freezes the value before anything can
+  set it, which is what made the locations unconfigurable in the first place.
+- A class body cannot call a classmethod: at that point it is still a
+  `classmethod` object rather than a bound method, so `DATA_DIR = data_dir()`
+  raises `TypeError: 'classmethod' object is not callable`. There is no way to
+  have both, and the method is the one that works.
+
+**Under Docker the image relocates all three** and sets them as environment
+variables rather than compiling them in, so the same image run on a machine puts
+them back beside the source: database `/var/lib/sawa9ly`, logs `/var/log/sawa9ly`,
+locks `/tmp/sawa9ly`.
+
+The locks move to `/tmp` on purpose. A lock file only means anything while the
+process holding it is alive, and `Cron._Lock` is an `O_EXCL` create rather than a
+flock, so one left by a killed process is a stale file to be reported rather than
+a lock to wait on. A container's writable layer is discarded with the container,
+so a lock has nothing worth surviving it, and giving it a volume would be the
+opposite of what a volume is for.
+
 ## Logging is on by default, and split by subsystem
 
 `src/logging_setup.py` owns it. The level defaults to `INFO` and the files are on,
@@ -99,7 +138,8 @@ because the queue and the bot are run in the background and then never seen agai
 — their pass summaries are the only record that they ran at all.
 
 One file per subsystem, because the api, the dashboard, the CLI, the queue and the
-bot fail separately. `LOG_DIR` (default `logs`, resolved under `data/`) holds them:
+bot fail separately. `LOG_DIR` (default `logs/`, resolved against the project
+root like every default here) holds them:
 
 | File | Routed by logger name |
 |---|---|
@@ -160,6 +200,26 @@ A filter runs once per handler and there are six of them, so the result is marke
 the record (`_sawa9ly_redacted`) and computed once; otherwise one secret would be
 marked six times or a record could reach one handler unredacted and the next
 redacted.
+
+### Talking to a container
+
+`bin/sawa9ly-api` is installed at `/usr/local/bin/sawa9ly-api` in the image, so
+`docker exec <container> sawa9ly-api <args>` reaches the CLI without a shell. It is
+`exec python -m sawa9ly "$@"` and nothing else, deliberately:
+
+- `exec`, so the exit status is the CLI's own. `cron run` signals a failed pass
+  through it, and a wrapper that swallowed that would report a broken queue as a
+  healthy one.
+- `-m sawa9ly` rather than `python /app/main.py`, so the working directory does not
+  matter — `docker exec -w` can change it, and a command that only works from one
+  directory fails in a way that looks like a bug in the command. The image sets
+  `PYTHONPATH=/app` to make this true from anywhere.
+- No argument handling of its own, because anything it accepted and ignored would
+  be a command that appeared to work and did nothing.
+
+The Dockerfile `chmod 755`s it rather than trusting the file's own mode: a
+checkout on Windows has no executable bit for `COPY` to preserve, and the script
+would arrive as a 0644 file the container cannot run.
 
 ### Where the configuration is actually applied
 

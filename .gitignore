@@ -2,15 +2,24 @@
 #
 # The real environment is never committed. `.env.example` IS the committed
 # template, so the broad `.env.*` pattern is negated back below - without that
-# line the template would be ignored along with the secrets.
+# line the template would be ignored along with the secrets. Same for the docker
+# template, which is committed for the same reason and is just as easy to forget
+# to un-ignore.
 .env
 .env.*
 !.env.example
+!.env.docker.example
 *.pem
 *.key
 
-# The SQLite database, the log file and anything else the app writes at runtime.
+# Everything the application writes at runtime. Three directories, deliberately
+# separate, because they are wanted on different terms: `database/` is the state
+# to back up, `data/` is per-process working state whose only content is a lock
+# file, and `logs/` is large and disposable. Backing up any one of them should
+# not mean keeping the other two.
+database/
 data/
+logs/
 
 # Python bytecode.
 __pycache__/

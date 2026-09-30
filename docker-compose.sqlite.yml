@@ -1,0 +1,112 @@
+# =============================================================================
+# Profile: sqlite
+#
+#   cp .env.docker.example .env.docker    # then set the super admin password
+#   docker compose --env-file .env.docker -f docker-compose.sqlite.yml up -d --build
+#
+# `--env-file .env.docker` is required, not decoration. A service's `env_file:`
+# puts variables *into a container*, while `${...}` reads variables *from the shell
+# or from the file named by --env-file*. The two never overlap, so a value in
+# `.env.docker` is invisible to the interpolation below unless --env-file says so.
+#
+# Three containers from one image: the API, the bot and the queue. Not one
+# container running all three, because the three fail independently and are
+# restarted independently, and the project already assumes separate processes -
+# each takes its own lock file and writes its own log. A queue that wedges should
+# not take the dashboard down with it.
+#
+# This is a file rather than a compose `profile`, and that is not a preference.
+# A profile cannot give one service two different environments, which is exactly
+# the difference between here and the postgres file: `serve` under sqlite and
+# `serve` under postgres are the same image and the same command with a different
+# database, and expressing that needs two service definitions. Two files is the
+# honest form of that.
+#
+# The database is a file in the mounted volume. That is fine for one machine,
+# and it is the reason the postgres profile exists: three containers writing one
+# SQLite file over a Docker Desktop volume is the part of this setup most likely
+# to be slow, or to lock, on macOS and Windows. On Linux with a local volume it
+# is unremarkable. See the README.
+# =============================================================================
+
+name: sawa9ly-sqlite
+
+# Everything the three processes have in common. The differences between them
+# are a command and a published port, nothing else.
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: sawa9ly-api:latest
+  restart: unless-stopped
+  env_file:
+    - path: .env.docker
+      required: false
+  environment:
+    # Both are required, and compose refuses to start without them. A super
+    # account is created from these on first boot, so an empty value would be a
+    # dashboard anyone could sign in to.
+    SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-admin}
+    SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?set SUPER_ADMIN_PASSWORD in .env.docker, and pass --env-file .env.docker so compose can read it}
+    # Force SQLite, rather than merely not mentioning a server.
+    #
+    # `--env-file .env.docker` puts every variable in that file into every
+    # container, and one shared file is going to carry DB_NAME and DB_PASSWORD
+    # because the postgres stack needs them. The application prefers a server
+    # over a file the moment DB_NAME is set, so leaving these alone would make
+    # this stack boot, pick a database, and try to reach
+    # `postgresql://...@localhost:5432` - a postgres this stack does not have and
+    # never will. Naming the driver is what makes this file mean SQLite.
+    DB_DRIVER: sqlite
+    DB_NAME: ""
+    DB_HOST: ""
+    DB_PORT: ""
+    DB_USER: ""
+    DB_PASSWORD: ""
+    DATABASE_URL: ""
+  volumes:
+    # The database, on a volume, because it is the one thing in the whole
+    # deployment that cannot be recreated: it holds the accounts, the API keys and
+    # the order history. Without this, `docker compose down` would take the
+    # database with it.
+    - sawa9ly-database:/var/lib/sawa9ly
+    #
+    # Deliberately no volume for the logs, and no volume for the lock files.
+    #
+    # The logs are already somewhere to read them: each of these three
+    # containers has its own `docker logs`, which is one stream per process and
+    # carries the same lines as the per-subsystem files inside the container.
+    # Persisting the files as well would mean a second copy to rotate, store and
+    # delete, with nothing in it that the streams do not already have. The
+    # per-subsystem files still exist, and still earn their place on a machine
+    # where there is one terminal rather than three.
+    #
+    # The lock files are per-process state with no meaning once the process is
+    # gone, so a volume would be the opposite of what a volume is for.
+
+services:
+  serve:
+    <<: *app
+    command: ["python", "main.py", "serve"]
+    ports:
+      # The host's loopback, not every interface. This is an admin surface with
+      # real API keys behind it; publishing it to the network is a decision
+      # someone should make deliberately, not a default someone inherits.
+      - "127.0.0.1:${API_PUBLISHED_PORT:-8000}:${API_PORT:-8000}"
+
+  telegram:
+    <<: *app
+    command: ["python", "main.py", "telegram", "listen"]
+    # Serves nothing over HTTP, so the image's HTTP health check would only ever
+    # report this container unhealthy.
+    healthcheck:
+      disable: true
+
+  cron:
+    <<: *app
+    command: ["python", "main.py", "cron", "listen"]
+    healthcheck:
+      disable: true
+
+volumes:
+  sawa9ly-database:

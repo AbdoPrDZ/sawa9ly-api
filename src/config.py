@@ -25,7 +25,81 @@ class Config:
   """The project's environment, grouped by what it configures."""
 
   PROJECT_ROOT = Path(__file__).resolve().parents[1]
-  DATA_DIR = PROJECT_ROOT / "data"
+
+  DATA_DIR_VAR = "DATA_DIR"
+  """Where the application keeps its working files that are not the database and
+    not the logs: currently the queue's and the bot's lock files.
+
+    Unset, it is `data/` beside the source. Relative values are resolved against
+    the project root, so `data` and `./data` mean the same thing however the
+    command was invoked.
+
+    The database and the logs each have their own setting, because they are
+    different kinds of thing: the database is the state to back up, the logs are
+    large and disposable, and the locks are ephemeral and worthless once the
+    process holding them has gone. Putting all three in one directory makes
+    backing up any of them mean keeping the other two."""
+
+  DATABASE_DIR_VAR = "DATABASE_DIR"
+  """Where the SQLite file lives. Default `database/` beside the source.
+
+    Only consulted for SQLite. A PostgreSQL or MySQL database is a server's
+    business and this setting has no meaning there."""
+
+  LOCK_DIR_VAR = "LOCK_DIR"
+  """Where the queue's and the bot's lock files are created. Default: the data
+    directory.
+
+    A lock file only means anything while the process holding it is alive, and it
+    is a `O_EXCL` create rather than a flock, so one left behind by a killed
+    process is a stale file to be told about rather than a lock to be waited on.
+    `/tmp` is the honest place for that under Docker, where the container's
+    writable layer is thrown away with the container and nothing needs to survive
+    it."""
+
+  DEFAULT_DATA_DIR = "data"
+  DEFAULT_DATABASE_DIR = "database"
+
+  @classmethod
+  def _resolve(cls, raw):
+    """A configured path, absolute as given and project-relative otherwise."""
+    path = Path(raw)
+
+    if not path.is_absolute():
+      path = cls.PROJECT_ROOT / path
+
+    return path
+
+  @classmethod
+  def data_dir(cls):
+    """Where the working files that are neither database nor logs are kept.
+
+    Deliberately a method and not a class attribute. An attribute would have to
+    be computed in the class body, which is import time: the value would then be
+    frozen before anything could set the environment, and calling a classmethod
+    from a class body is not even possible, because at that point it is still a
+    `classmethod` object rather than a bound method. Reading the environment when
+    the question is asked is both the thing that makes the location configurable
+    and the only version of this that works.
+    """
+    return cls._resolve(os.getenv(cls.DATA_DIR_VAR) or cls.DEFAULT_DATA_DIR)
+
+  @classmethod
+  def database_dir(cls):
+    """Where the SQLite file is created, if it is not named outright."""
+    return cls._resolve(os.getenv(cls.DATABASE_DIR_VAR) or cls.DEFAULT_DATABASE_DIR)
+
+  @classmethod
+  def lock_dir(cls):
+    """Where the queue's and the bot's lock files are created.
+
+    No default of its own: it falls back to the data directory, so setting
+    `DATA_DIR` moves the locks too and a deployment that has set only that stays
+    self-consistent.
+    """
+    raw = os.getenv(cls.LOCK_DIR_VAR)
+
+    return cls._resolve(raw) if raw else cls.data_dir()
 
   # There is no default-user *setting*. `--user` is optional and falls back to
   # the super admin, but that account is read from the database rather than
@@ -76,12 +150,12 @@ class Config:
 
   @classmethod
   def sqlite_url(cls):
-    """The default file database, in `data/`.
+    """The default file database, in `database/`.
 
     The directory is created here rather than at import time, so importing
     `Config` never has the side effect of touching the filesystem.
     """
-    path = Path(os.getenv(cls.SQLITE_FILE_VAR) or (cls.DATA_DIR / "sawa9ly.db"))
+    path = Path(os.getenv(cls.SQLITE_FILE_VAR) or (cls.database_dir() / "sawa9ly.db"))
 
     if not path.is_absolute():
       path = cls.PROJECT_ROOT / path
@@ -149,7 +223,11 @@ class Config:
     `logging_setup`, which pins that one deliberately."""
 
   LOG_DIR_VAR = "LOG_DIR"
-  """Where the per-subsystem log files go. Default `data/logs`.
+  """Where the per-subsystem log files go. Default `logs/` beside the source.
+
+    Set it to an absolute path to put them somewhere else - `/var/log/sawa9ly`
+    under Docker, which is where a Linux system keeps logs and where a volume is
+    expected to be mounted for them.
 
     One file per subsystem - api, dashboard, cli, cron, telegram - so a failure in
     one does not have to be read out of the others. Files appear only when
@@ -176,16 +254,12 @@ class Config:
   def log_dir(cls):
     """The directory the per-subsystem log files live in.
 
-    Resolved but not created: an empty directory on a machine that has logged
-    nothing yet is clutter, and each handler makes its own file on first write.
+    Resolved against the project root, not the data directory, so the default is
+    `logs/` beside the source - logs in their own place, next to the database
+    rather than inside it. Absolute when set, which is how a container puts them
+    under `/var/log`.
     """
-    raw = os.getenv(cls.LOG_DIR_VAR) or cls.DEFAULT_LOG_DIR
-    path = Path(raw)
-
-    if not path.is_absolute():
-      path = cls.DATA_DIR / path
-
-    return path
+    return cls._resolve(os.getenv(cls.LOG_DIR_VAR) or cls.DEFAULT_LOG_DIR)
 
   @classmethod
   def log_file(cls):
@@ -198,12 +272,7 @@ class Config:
     if not raw:
       return None
 
-    path = Path(raw)
-
-    if not path.is_absolute():
-      path = cls.DATA_DIR / path
-
-    return path
+    return cls._resolve(raw)
 
   @classmethod
   def log_format(cls):

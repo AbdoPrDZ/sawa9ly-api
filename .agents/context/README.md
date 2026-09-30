@@ -48,7 +48,7 @@ cart. An admin dashboard in `dashboard/` manages users, roles and API keys.
   the project reads `os.environ`.
 - **There is no default user.** Every command that acts for an account requires
   `--user`, and `Livewire` requires a username.
-- `data/sawa9ly.db` is a real, gitignored SQLite file. `create_all` builds it and
+- `database/sawa9ly.db` is a real, gitignored SQLite file. `create_all` builds it and
   will not migrate it — delete it to rebuild.
 - The version lives in `src/version.py` and nowhere else. `setup.py` and the
   API's advertised version both read that file.

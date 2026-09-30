@@ -12,7 +12,6 @@ for something worth being told about.
 """
 
 import sys
-from pathlib import Path
 
 from src.config import Config
 from src.services import TelegramService
@@ -82,12 +81,21 @@ class TelegramCli:
         f"gave you when you created the bot."
       )
 
+    # Before the first poll, for the same reason the queue does it: this listener
+    # opens its own sessions per update and never goes through `Cli.db()`, so
+    # nothing had made the tables before a binding code arrived. Started alongside
+    # the API - which is the normal way it runs - the first code to arrive can
+    # land before that API's `create_all` has finished.
+    from src.utils.livewire import ensure_db
+
+    ensure_db()
+
     # Taken before the first poll, because one poller per token is Telegram's
     # rule. A second one is not refused politely either: it is answered with a
     # 409 on every poll, forever, and a listener that can only fail in a way that
     # looks like a network problem is worse than one that says why it stopped.
     lock = Cron._Lock(
-      Path(Config.DATA_DIR) / LOCK_NAME,
+      Config.lock_dir() / LOCK_NAME,
       # 0: never take a stale lock over. A listener is started by hand, so a
       # leftover file is an accident to be told about, not a pass that is still
       # working — and unlike a queue pass, waiting 15 minutes for it is not a

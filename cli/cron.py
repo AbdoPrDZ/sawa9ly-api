@@ -36,6 +36,17 @@ class CronCli:
   def dispatch(args):
     from cli.base import Cli
     from src.services import Cron
+    from src.utils.livewire import ensure_db
+
+    # Before the first pass, not inside it. `Cron.run_once` and `Cron.listen` open
+    # their own sessions and so never go through `Cli.db()`, which is what made
+    # this work for every other command. Under Docker all three processes start
+    # at once against one database, and nothing ordered the queue after the API -
+    # so the queue asked for `trackers` and `orders` a moment before the API's
+    # `create_all` had made them, and reported a missing relation rather than the
+    # thing that was actually true. A queue that depends on the API having booted
+    # first is a queue that fails whenever it is started on its own.
+    ensure_db()
 
     if args.action == 'run':
       summary = Cron.run_once(delay=args.delay)

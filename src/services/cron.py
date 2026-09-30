@@ -22,7 +22,6 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 
 from src.config import Config
 
@@ -155,7 +154,7 @@ class Cron:
 
   @staticmethod
   def _lock_path():
-    return Path(Config.DATA_DIR) / LOCK_NAME
+    return Config.lock_dir() / LOCK_NAME
 
   class _Lock:
     """A lock file, held for the duration of a `with` block.

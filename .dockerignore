@@ -1,0 +1,72 @@
+# Keep the build context small, and keep secrets out of the image.
+#
+# The most important line here is `.env`. It holds a dashboard password, a
+# sawa9ly account password and a Telegram bot token, and a `COPY . .` would bake
+# all three into a layer where they survive every later deletion. It is listed
+# first so it is impossible to miss why it is here.
+
+# Secrets and local environment.
+.env
+.env.*
+!.env.example
+!.env.docker.example
+*.pem
+*.key
+
+# Runtime state: the local database, the logs and the lock files. A `COPY . .`
+# would otherwise bake one environment's accounts, API keys and order history
+# into a layer where they survive every later deletion. The image creates these
+# directories empty and mounts volumes over them.
+database/
+data/
+logs/
+
+# Version control.
+.git
+.gitignore
+.github
+
+# The agent context and documentation: useful in the repository, dead weight in
+# an image that only runs the application.
+.agents
+*.md
+
+# Python bytecode and virtual environments. `.venv` is also enormous, and is
+# rebuilt for the image's own interpreter anyway.
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+env/
+build/
+dist/
+*.egg-info/
+.eggs/
+wheels/
+pip-wheel-metadata/
+
+# Node. The dashboard stage installs its own from package-lock.json, and a
+# host `node_modules` would be for a different platform and a different libc.
+node_modules/
+dashboard/node_modules/
+
+# The built dashboard. Rebuilt inside the image from the same source, so a stale
+# or half-built local `dist` cannot end up inside a release.
+dashboard/dist/
+
+# Editors and operating system junk.
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini

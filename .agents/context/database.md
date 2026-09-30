@@ -5,19 +5,29 @@ default, overridable with `DATABASE_URL` for a server deployment.
 
 ## Setup facts that matter
 
-- The default file is `data/sawa9ly.db`, created relative to the project root, not
-  the working directory. `data/` is gitignored because it holds live session
+- The default file is `database/sawa9ly.db`, created relative to the project root, not
+  the working directory. `database/` is gitignored because it holds live session
   cookies and per-user passwords.
 - **`PRAGMA foreign_keys=ON` is set per connection by an engine event.** Without
   it every `ON DELETE CASCADE` in the schema silently does nothing, so deleting a
   user orphans their settings, keys, clients and orders. Any new connection path
   must go through the same engine.
+- **Every process calls `ensure_db()` before it touches an entity**, and "every
+  process" is not a figure of speech: under Docker the API, the queue and the bot
+  are three containers starting at once against one database. The API does it when
+  `create_app` builds the app, the CLI when it opens a `Cli.db()` session, and the
+  two long-running listeners do it themselves in their CLI `dispatch`/`_listen` —
+  because they open their own sessions and never pass through `Cli.db()`. That gap
+  was a real race: the queue asked for `trackers` and `orders` half a second
+  before the API's `create_all` had made them, and reported a missing relation
+  rather than the thing that was true. A new long-running entry point needs the
+  same call, or `depends_on` is doing a job it cannot do.
 - `check_same_thread=False` is required for SQLite because FastAPI's threadpool
   hands a session to a worker thread.
 - `init_db()` calls `create_all`, which **creates missing tables and nothing
   else**. It does not alter, migrate or backfill an existing file. The project is
   **not in production, so a schema change means editing the model and deleting
-  `data/sawa9ly.db`** to rebuild it. There is deliberately no migration runner.
+  `database/sawa9ly.db`** to rebuild it. There is deliberately no migration runner.
   Stop any running server first — an open connection keeps the file locked on
   Windows and the delete fails.
 - `session_scope()` is a session usable as a context manager. Controllers get one
