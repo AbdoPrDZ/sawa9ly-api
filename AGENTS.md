@@ -180,3 +180,34 @@ There is no test suite; verification is manual against the real site.
   cookie is the one deliberate exception.
 - Cookies are credentials. Anything that writes one to disk, a log, or an error
   message is a bug.
+
+## Git
+
+**Never rewrite or delete history, and never force-push.** Not `reset` in any
+form, not `rebase`, not `filter-branch` or `filter-repo`, not `commit --amend` on
+anything pushed, not `push -f` or `--force-with-lease`, not deleting a branch or
+tag, not `checkout .` or `restore .` — nothing that can make a commit somebody
+else already has stop existing, and nothing that discards uncommitted work
+without asking.
+
+A commit is not ours to remove. It may be what a teammate has, it may be cited in
+a bug report, and it is often the only surviving record of why a decision was made
+— the reasoning lives in the message and nowhere else. The operation is also
+nearly unrecoverable for anyone who has already pulled it, so the cost of being
+wrong is nowhere near symmetric with the tidiness of being right.
+
+Fine, and expected: `status`, `diff`, `log`, `show`, `add`, a new `commit`,
+`branch` to create or switch, `fetch`, a fast-forward `pull`, `stash push`. Also
+`revert`, which is the answer to "that commit was wrong" — it is a *new* commit
+and leaves the original in place.
+
+If history genuinely has to change, **say so and wait.** Lay out the options and
+what each costs, then let the person decide.
+
+**A leaked secret is the case that feels urgent, and it is still not a rewrite.**
+Revoking the credential *is* the fix: once the key is dead, the string sitting in
+history grants nothing, whatever anyone can see. Scrubbing history is hygiene, not
+mitigation, and it is the step that breaks other clones and every SHA anyone has
+recorded. Remove the secret from the working tree so it cannot be committed again,
+do the revocation without being asked, and *propose* the rewrite rather than
+running it.
