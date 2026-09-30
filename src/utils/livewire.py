@@ -47,8 +47,14 @@ def ensure_db():
   """Create the tables once per process, before any entity is used.
 
   The project is not in production, so a schema change means editing the
-  model, deleting `data/sawa9ly.db` and letting `create_all` rebuild it.
+  model, deleting the SQLite file and letting `create_all` rebuild it.
   There is deliberately no migration runner.
+
+  Every process that touches the database calls this first: the server when the
+  app is built, the CLI before it opens a session, and the queue and the bot
+  before their first pass or poll. That last part is not redundancy — under
+  Docker all three start at once, and the two long-running ones used to reach a
+  table the API had not created yet.
   """
   global _db_ready
 

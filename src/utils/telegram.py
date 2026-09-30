@@ -9,11 +9,11 @@ call, the way the API is designed, and that makes it a standing leak risk:
 - `requests` and `urllib3` quote the full URL in their error messages, so an
   exception that escapes with the URL attached has written the token into a log,
   a traceback or a cron summary.
-- The project's `SecretFilter` does not save us. It redacts a record only when the
-  rendered message contains one of `SECRET_WORDS` (`password`, `token`, `secret`,
-  ...), and a real token looks like `7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw`
-  — it contains none of those words. The filter also only clears `record.args`,
-  so a token already interpolated into `record.msg` survives it entirely.
+- The project's `SecretFilter` does not save us, and cannot. It redacts the value
+  after a `key=value` or `key: value` pair in the rendered line, and a token in a
+  URL has neither - it sits after `/bot`, with nothing in front of it naming it as
+  a secret. So the field-name filter has nothing to match and this module's
+  `_redact` is the only thing standing between a token and a log file.
 
 So the rule here is that the token lives in exactly one private attribute, URLs
 are built from a base plus a method name, and every error that leaves this module

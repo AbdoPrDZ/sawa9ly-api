@@ -116,11 +116,10 @@ refused cleanly and the sender is told why.
 
 The Bot API puts the token in the URL of every call, and `requests`/`urllib3`
 quote the full URL in their error messages. **The project's `SecretFilter` does
-not cover this**: it redacts a record only when the rendered message contains one
-of `SECRET_WORDS` (`password`, `token`, `secret`, ...), and a real token looks
-like `7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw` — none of those words. The
-filter also only clears `record.args`, so a token interpolated into `record.msg`
-survives it entirely.
+not cover this**: it redacts the value after a `key=value` or `key: value` pair
+in the rendered line, and a token in a URL has neither — it sits after `/bot`,
+with nothing naming it as a secret, so the field-name filter has nothing to match.
+This module's `_redact` is the only thing standing between a token and a log file.
 
 So `src/utils/telegram.py` treats the token as the file's whole reason to exist:
 it lives in one private attribute, URLs are built from a base plus a method name,
