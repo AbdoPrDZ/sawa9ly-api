@@ -24,13 +24,18 @@ class ServeCli:
   def dispatch(args):
     import uvicorn
 
+    from cli.base import Cli
     from src.logging_setup import UVICORN_LOG_CONFIG, Logging
 
     # uvicorn installs its own handlers over the root logger unless told not to,
-    # which would leave every log file empty no matter what Config says. This
-    # is why `main.py serve` now honours LOG_LEVEL and LOG_DIR at all: the
+    # which would leave every log file empty no matter what Config says. This is
+    # why `main.py serve` now honours LOG_LEVEL and LOG_DIR at all: the
     # `python -m src.server` path always did, this one did not.
     Logging.configure()
+
+    # Before the app is built, so an occupied port costs a sentence rather than
+    # an opened database and a banner.
+    Cli.assert_port_free(args.host, args.port)
 
     uvicorn.run(
       "src.server:app",

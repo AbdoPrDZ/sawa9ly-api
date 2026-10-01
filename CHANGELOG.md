@@ -11,6 +11,18 @@ file, so there is no second place to update.
 
 ## [Unreleased]
 
+### Fixed — an occupied port says so, instead of raising `Errno 10048`
+
+- `main.py serve` and `main.py mcp` now check the port before they build
+  anything. A bind failure otherwise arrived from uvicorn as
+  `OSError: [Errno 10048] ... only one usage of each socket address` *after* a
+  twenty-line startup banner — which names neither what is holding the port nor
+  what to do about it, which on a machine where an IDE has quietly taken 8001 is
+  the entire problem.
+- It now says which address, how to find the holder (`netstat -ano | findstr` on
+  Windows, `lsof` elsewhere) and which flag changes it. `EACCES` — a privileged
+  port — gets its own sentence rather than being lumped in.
+
 ### Added — signing in to the MCP server, with no third-party identity provider
 
 - **The MCP server is its own OAuth authorization server.** Claude's connector

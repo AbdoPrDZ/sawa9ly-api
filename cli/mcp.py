@@ -35,8 +35,7 @@ class McpCli:
 
   @staticmethod
   def dispatch(args):
-    import sys
-
+    from cli.base import Cli
     from src.logging_setup import Logging
     from src.mcp import McpServer
 
@@ -46,6 +45,10 @@ class McpCli:
     # including the refusal a bad credential produces, which is exactly the line
     # an operator would come looking for.
     Logging.configure()
+
+    # Before anything is built, so an occupied port costs a sentence rather than
+    # a database open and a banner. `--port` is the flag to change.
+    Cli.assert_port_free(args.host, args.port)
 
     public_url = McpCli._public_url(args)
     McpCli._report(args, public_url)

@@ -48,6 +48,13 @@ deviation or "fix" it by accident.
   `dispatch`: `cli/app.py` imports every group when it builds the parser, and
   importing `src.server` runs `create_app()`, so a module-level import would make
   every command need a database. `cli/router.py` is the example.
+- **Anything that binds a port checks it first**, with
+  `Cli.assert_port_free(host, port, flag)`, before the server is built. A bind
+  failure otherwise arrives from uvicorn as `OSError: [Errno 10048]` *after* a
+  twenty-line banner — which says neither what is wrong nor what to do, and on a
+  machine where something else has taken the port, guessing which that is the
+  whole problem. The check binds and closes, so it is a check and not a
+  reservation; it buys a sentence in the common case.
 - **Request plumbing** hangs off `Dependencies`, so a controller's signature
   documents its own requirements. The MCP equivalent is `McpAuth`, which hangs the
   same three things off one namespace: `user()`, `client()` and `cart()`.

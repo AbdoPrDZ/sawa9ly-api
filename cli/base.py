@@ -1,6 +1,9 @@
 """Shared helpers for the command line."""
 
+import errno
 import json
+import socket
+import sys
 
 from src.db import session_scope
 from src.utils.livewire import ensure_db
@@ -14,6 +17,61 @@ class Cli:
     """An open database session, with the tables created."""
     ensure_db()
     return session_scope()
+
+  @staticmethod
+  def assert_port_free(host, port, flag="--port"):
+    """Exit with an actionable message if something already holds this port.
+
+    A pre-flight check, run before the server starts rather than as an
+    `except` around it, because the alternative is the failure this replaces: a
+    `uvicorn` traceback about `OSError: [Errno 10048]` arriving *after* a banner
+    twenty lines long, which says neither what is wrong nor what to do about it.
+
+    It binds and immediately closes, which is a check and not a reservation — a
+    port free now can be taken a moment later, and `uvicorn` still has to lose
+    that race on its own. What it buys is that the common case fails with a
+    sentence instead of an errno.
+
+    Only `EADDRINUSE` and `EACCES` are handled, because those are the two that
+    have a thing a person can do: stop the other process, or choose another port.
+    Anything else is left to propagate.
+    """
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    try:
+      probe.bind((host, port))
+    except OSError as error:
+      if error.errno == errno.EADDRINUSE:
+        raise SystemExit(
+          f"error: {host}:{port} is already in use, so the server cannot bind.\n"
+          f"  Another copy of this server may already be running, or something "
+          f"else has taken the port.\n"
+          f"  Find the holder with: {Cli._holder_command(port)}\n"
+          f"  Or choose another port: {flag} <number>"
+        ) from None
+
+      if error.errno == errno.EACCES:
+        raise SystemExit(
+          f"error: {host}:{port} needs a privilege this process does not have.\n"
+          f"  Ports below 1024 are reserved; pick one above it with: {flag} <number>"
+        ) from None
+
+      raise
+    finally:
+      probe.close()
+
+  @staticmethod
+  def _holder_command(port):
+    """The command that names whatever is holding a port, per platform.
+
+    Windows calls this `netstat`, and its output has to be filtered by hand
+    because it lists every connection on the machine; the two `findstr` variants
+    narrow it to a listening socket and to the process id respectively.
+    """
+    if sys.platform == "win32":
+      return f'netstat -ano | findstr "LISTENING" | findstr ":{port}"'
+
+    return f"lsof -i tcp:{port} -sTCP:LISTEN"
 
   @staticmethod
   def super_username():
