@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.controllers.dependencies import Dependencies
 from src.models import Client
-from src.schemas import ClientIn, ClientOut
+from src.schemas import ClientIn, ClientOut, Page
 
 
 class ClientController:
@@ -27,9 +27,18 @@ class ClientController:
 
     return client
 
-  @router.get("", response_model=list)
-  def list_clients(user=Depends(Dependencies.get_any_user), db=Depends(Dependencies.get_db)):
-    return [c.as_dict() for c in Client.all(db, user.id)]
+  @router.get("", response_model=Page[ClientOut])
+  def list_clients(q: str | None = None, limit: int | None = None,
+                   offset: int | None = None,
+                   user=Depends(Dependencies.get_any_user),
+                   db=Depends(Dependencies.get_db)):
+    """Your own delivery recipients.
+
+    `q` searches the name and the phone number; `limit` and `offset` page the
+    result. All three are optional, and passing none of them returns every row.
+    """
+    return Client.page(db, user.id, limit=limit, offset=offset,
+                       search=q).as_dict(lambda c: c.as_dict())
 
   @router.post("", response_model=ClientOut)
   def create(body: ClientIn, user=Depends(Dependencies.get_any_user),

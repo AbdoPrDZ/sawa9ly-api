@@ -1,8 +1,9 @@
-import { request } from './client'
-import type { AdminUser, NewUser, UserEdits } from './types'
+import { listQuery, request } from './client'
+import type { AdminUser, ListQuery, NewUser, PageResult, UserEdits } from './types'
 
-export function listUsers() {
-  return request<AdminUser[]>('/admin/users')
+/** One page of users. `query.q` searches the username. */
+export function listUsers(query: ListQuery = {}) {
+  return request<PageResult<AdminUser>>(`/admin/users${listQuery(query)}`)
 }
 
 export function createUser(input: NewUser) {

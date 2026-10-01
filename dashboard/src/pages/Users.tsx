@@ -1,26 +1,31 @@
-import { useCallback, useEffect, useState } from 'react'
-import { isUnauthorized } from '../api/client'
+import { useState } from 'react'
 import { createUser, deleteUser, listUsers, updateUser } from '../api/users'
 import type { AdminUser, NewUser, UserEdits } from '../api/types'
 import { Banner } from '../components/Banner'
+import { PageHeader } from '../components/PageHeader'
+import { Pager } from '../components/Pager'
 import { RoleBadge } from '../components/RoleBadge'
-import { Spinner } from '../components/Spinner'
+import { SearchInput } from '../components/SearchInput'
+import { MessageSpinner } from '../components/Spinner'
+import { TablePanel } from '../components/TablePanel'
+import { PAGE_SIZE, usePagedList } from '../hooks/usePagedList'
 import { CreateUserModal } from '../features/users/CreateUserModal'
 import { DeleteUserModal } from '../features/users/DeleteUserModal'
 import { EditUserModal } from '../features/users/EditUserModal'
+import { apiErrorMessage } from '../i18n/apiError'
+import { useI18n } from '../i18n/useI18n'
 import { useSession } from '../session/useSession'
 
 /** Trim a long value for a cell without hiding that it was shortened. */
-function brief(value: string | null, max = 30): string {
-  if (!value) return '—'
+function brief(value: string | null, max = 30): string | null {
+  if (!value) return null
   return value.length > max ? `${value.slice(0, max - 1)}…` : value
 }
 
 export function Users() {
   const { user: me, invalidate } = useSession()
-  const [users, setUsers] = useState<AdminUser[] | null>(null)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
+  const { t } = useI18n()
+const [notice, setNotice] = useState('')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<AdminUser | null>(null)
   const [removing, setRemoving] = useState<AdminUser | null>(null)
@@ -29,29 +34,22 @@ export function Users() {
   // disabled-and-explained, so an admin's page shows what they can actually do.
   const isSuper = me?.role === 'super'
 
-  const load = useCallback(async () => {
-    try {
-      setUsers(await listUsers())
-    } catch (caught) {
-      // A rejected token is a session problem, not a page problem, so it is
-      // handed back to the session rather than reported here.
-      if (isUnauthorized(caught)) return invalidate()
-      setError(message(caught, 'Could not load users.'))
-    }
-  }, [invalidate])
-
-  useEffect(() => {
-    load()
-  }, [load])
+  const list = usePagedList<AdminUser>(listUsers, {
+    errorKey: 'error.users',
+    // A rejected token is a session problem, not a page problem, so it is handed
+    // back to the session rather than reported here.
+    onUnauthorized: invalidate,
+  })
+  const users = list.items
 
   async function onCreate(input: NewUser) {
     try {
       await createUser(input)
       setCreating(false)
-      setNotice('User added.')
-      await load()
+      setNotice(t('users.added'))
+      list.reload()
     } catch (caught) {
-      setError(message(caught, 'Could not create the user.'))
+      list.setError(apiErrorMessage(caught, t, 'error.users'))
     }
   }
 
@@ -59,10 +57,10 @@ export function Users() {
     try {
       await updateUser(id, edits)
       setEditing(null)
-      setNotice('User updated.')
-      await load()
+      setNotice(t('users.updated'))
+      list.reload()
     } catch (caught) {
-      setError(message(caught, 'Could not save the user.'))
+      list.setError(apiErrorMessage(caught, t, 'error.users'))
     }
   }
 
@@ -70,94 +68,112 @@ export function Users() {
     try {
       await deleteUser(target.id)
       setRemoving(null)
-      setNotice(`Deleted ${target.username}.`)
-      await load()
+      setNotice(t('users.deleted', { name: target.username }))
+      list.reload()
     } catch (caught) {
-      setError(message(caught, 'Could not delete the user.'))
+      list.setError(apiErrorMessage(caught, t, 'error.users'))
       setRemoving(null)
     }
   }
 
   return (
     <section>
-      <div className="section-head">
-        <h2>Users</h2>
-        <button type="button" className="primary" onClick={() => setCreating(true)}>
-          Add user
+      <PageHeader title={t('users.title')}>
+        <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+          {t('users.add')}
         </button>
-      </div>
+      </PageHeader>
 
-      {error ? <Banner kind="error">{error}</Banner> : null}
+{list.error ? <Banner kind="error">{list.error}</Banner> : null}
       {notice ? <Banner kind="success">{notice}</Banner> : null}
 
-      {!isSuper ? (
-        <Banner kind="info">
-          As an administrator you can add users. Editing or deleting an existing account needs
-          the super role.
-        </Banner>
-      ) : null}
+      {!isSuper ? <Banner kind="info">{t('users.adminBanner')}</Banner> : null}
+
+      <div className="mb-4 max-w-sm">
+        <SearchInput
+          value={list.query.term}
+          onChange={list.query.setTerm}
+          placeholder={t('list.searchBy', { resource: t('resource.users') })}
+          label={t('list.search')}
+          busy={list.busy}
+        />
+      </div>
 
       {!users ? (
-        <Spinner label="Loading users" />
+        <MessageSpinner messageKey="loading.users" />
       ) : (
-        <table>
+        <TablePanel>
           <thead>
             <tr>
-              <th>Username</th>
-              <th>Role</th>
-              <th>Sawa9ly</th>
-              <th>Telegram</th>
-              <th>Keys</th>
-              <th>Orders</th>
-              <th>Dashboard</th>
+              <th>{t('users.col.username')}</th>
+              <th>{t('users.col.role')}</th>
+              <th>{t('users.col.sawa9ly')}</th>
+              <th>{t('users.col.telegram')}</th>
+              <th>{t('users.col.keys')}</th>
+              <th>{t('users.col.orders')}</th>
+              <th>{t('users.col.dashboard')}</th>
               {isSuper ? <th /> : null}
             </tr>
           </thead>
           <tbody>
             {users.map((row) => (
               <tr key={row.id}>
-                <td>
+                <td className="font-medium">
                   {row.username}
-                  {me?.id === row.id ? <span className="muted"> (you)</span> : null}
+                  {me?.id === row.id ? (
+                    <span className="ms-1.5 text-xs text-faint">{t('generic.you')}</span>
+                  ) : null}
                 </td>
                 <td>
                   <RoleBadge role={row.role} />
                 </td>
                 {/* Whether the user has set their own, not the value: it is
                     theirs, and an admin only needs to know it is done. */}
-                <td>{row.has_sawa9ly_credentials ? 'set' : 'not set'}</td>
-                <td>{brief(row.telegram_chat_id)}</td>
+                <td>{row.has_sawa9ly_credentials ? t('users.set') : t('users.notSet')}</td>
+                <td className="font-mono text-xs text-muted">
+                  {brief(row.telegram_chat_id) ?? t('generic.unknown')}
+                </td>
                 <td>{row.active_api_keys}</td>
                 <td>{row.orders}</td>
-                <td>{row.can_log_in ? 'can sign in' : 'no password'}</td>
+                <td>{row.can_log_in ? t('users.canSignIn') : t('users.noPassword')}</td>
                 {isSuper ? (
-                  <td className="row-actions">
-                    <button
-                      type="button"
-                      className="ghost"
-                      disabled={!row.can_be_managed}
-                      title={
-                        row.can_be_managed ? undefined : 'A super account is managed from the CLI'
-                      }
-                      onClick={() => setEditing(row)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="danger"
-                      disabled={!row.can_be_managed || me?.id === row.id}
-                      title={deleteTitle(row, me?.id)}
-                      onClick={() => setRemoving(row)}
-                    >
-                      Delete
-                    </button>
+                  <td>
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={!row.can_be_managed}
+                        title={row.can_be_managed ? undefined : t('users.superManaged')}
+                        onClick={() => setEditing(row)}
+                      >
+                        {t('generic.edit')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        disabled={!row.can_be_managed || me?.id === row.id}
+                        title={deleteTitle(row, me?.id, t)}
+                        onClick={() => setRemoving(row)}
+                      >
+                        {t('generic.delete')}
+                      </button>
+                    </div>
                   </td>
                 ) : null}
               </tr>
             ))}
-          </tbody>
-        </table>
+</tbody>
+        </TablePanel>
+      )}
+
+      {users && users.length > 0 && (
+        <Pager
+          total={list.total}
+          page={list.query.page}
+          pageSize={PAGE_SIZE}
+          hasMore={list.hasMore}
+          onPage={list.query.setPage}
+        />
       )}
 
       {creating ? (
@@ -184,13 +200,10 @@ export function Users() {
   )
 }
 
-function message(caught: unknown, fallback: string): string {
-  return caught instanceof Error ? caught.message : fallback
-}
 
 /** Why the delete button is disabled, so the reason is visible on hover. */
-function deleteTitle(row: AdminUser, meId?: number): string | undefined {
-  if (!row.can_be_managed) return 'A super account is managed from the CLI'
-  if (row.id === meId) return 'You cannot delete your own account'
+function deleteTitle(row: AdminUser, meId: number | undefined, t: (key: 'users.superManaged' | 'users.cannotDeleteSelf') => string): string | undefined {
+  if (!row.can_be_managed) return t('users.superManaged')
+  if (row.id === meId) return t('users.cannotDeleteSelf')
   return undefined
 }

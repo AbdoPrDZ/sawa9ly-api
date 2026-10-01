@@ -8,6 +8,7 @@ from src.controllers.cart import CartController
 from src.controllers.catalogue import CatalogueController
 from src.controllers.checkout import CheckoutController
 from src.controllers.client import ClientController
+from src.controllers.keys import ApiKeysController
 from src.controllers.order import OrderController
 from src.controllers.page import PageController
 from src.controllers.products import ProductsController
@@ -20,6 +21,7 @@ __all__ = [
   "AdminKeysController",
   "AdminOrdersController",
   "AdminUsersController",
+  "ApiKeysController",
   "AuthController",
   "CartController",
   "CatalogueController",

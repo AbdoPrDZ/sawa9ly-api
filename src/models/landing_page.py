@@ -3,7 +3,7 @@
 import secrets
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, select
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, or_, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db import Base, utcnow
@@ -108,8 +108,35 @@ class LandingPage(Base):
     ).scalar_one_or_none()
 
   @classmethod
-  def all(cls, db, user_id=None, product_id=None, state=None):
-    """Pages, newest first, optionally narrowed to a user, product or state."""
+  def all(cls, db, user_id=None, product_id=None, state=None,
+          limit=None, offset=None, search=None):
+    """Pages, newest first, optionally narrowed and paged.
+
+    `search` matches the title and the product id exactly.
+    """
+    from src.models.paging import Paging
+
+    return list(db.execute(
+      Paging.apply(cls._filtered(user_id, product_id, state, search), limit, offset)
+    ).scalars())
+
+  @classmethod
+  def page(cls, db, user_id=None, product_id=None, state=None,
+           limit=None, offset=None, search=None):
+    """One page of landing pages, and the total before paging.
+
+    Separate from `all` because `all` is what the CLI reads and it keeps
+    returning a plain list. Only the HTTP list route needs the count.
+    """
+    from src.models.paging import Paging
+
+    return Paging.run(db, cls._filtered(user_id, product_id, state, search), limit, offset)
+
+  @classmethod
+  def _filtered(cls, user_id=None, product_id=None, state=None, search=None):
+    """The select every list of landing pages shares."""
+    from src.utils.search import Search
+
     query = select(cls).order_by(cls.id.desc())
     if user_id is not None:
       query = query.where(cls.user_id == user_id)
@@ -117,7 +144,16 @@ class LandingPage(Base):
       query = query.where(cls.product_id == product_id)
     if state is not None:
       query = query.where(cls.state == state)
-    return list(db.execute(query).scalars())
+
+    match = Search.match(
+      Search.like(cls.title, search),
+      Search.equals_int(cls.product_id, search),
+    )
+
+    if match is not None:
+      query = query.where(match)
+
+    return query
 
   @classmethod
   def create(cls, db, user_id, product_pk, title, html="", public_id=None):

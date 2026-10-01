@@ -11,12 +11,51 @@ export type Role = 'admin' | 'user'
 /** The full set the API understands, for displaying a user's actual role. */
 export type AnyRole = Role | 'super'
 
+/** The languages the dashboard is written in. Mirrors `Locale.ALL` in
+ * `src/i18n.py`; the server is the authority and this list has to match it.
+ */
+export type Locale = 'en' | 'fr' | 'ar'
+
+
+/**
+ * One page of a list route's results.
+ *
+ * Mirrors `Page` in `src/schemas.py`. The rows used to arrive as a bare array,
+ * which cannot say how many there were in total — so the server now wraps them,
+ * and `items` is where the rows are. `has_more` comes from the server rather
+ * than being worked out here, because the arithmetic differs when a page comes
+ * back short for a reason other than being the last one.
+ *
+ * Named `PageResult` and not `Page` because `Page` is already a landing page in
+ * this file, and one type shadowing the other is a bug waiting to happen.
+ */
+export interface PageResult<T> {
+  items: T[]
+  total: number
+  limit: number | null
+  offset: number
+  has_more: boolean
+}
+
+/** What a list screen passes to a list route. Every field is optional, and
+ * omitting all of them asks for the whole list.
+ */
+export interface ListQuery {
+  q?: string
+  limit?: number
+  offset?: number
+}
+
 
 export interface SessionUser {
   id: number
   username: string
   role: AnyRole
   is_admin: boolean
+  /** Which language this user reads. The server decides it, because the same
+   * value decides the language of their Telegram notifications — a language
+   * kept only in the browser would let the two disagree. */
+  locale: Locale
 }
 
 export interface LoginResponse {
@@ -56,6 +95,7 @@ export interface Profile {
   has_sawa9ly_credentials: boolean
   sawa9ly_email: string | null
   has_sawa9ly_session: boolean
+  locale: Locale
 }
 
 export interface Sawa9lyLoginResult {
@@ -234,6 +274,15 @@ export interface UserEdits {
    *  — a user sets their own sawa9ly credentials, and an admin who could type
    *  them in could act as that user on the site. */
   password?: string
+}
+
+/** The editable part of your own account. Absent means unchanged. */
+export interface ProfileIn {
+  sawa9ly_email?: string | null
+  sawa9ly_password?: string | null
+  password?: string
+  /** The language the dashboard and this user's notifications are written in. */
+  locale?: Locale
 }
 
 export interface NewUser extends UserEdits {

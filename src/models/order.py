@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, select
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, or_, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db import Base, utcnow
@@ -89,6 +89,44 @@ class Order(Base):
     if state is not None:
       query = query.where(cls.state == state)
     return list(db.execute(query).scalars())
+
+  @classmethod
+  def _filtered(cls, user_id=None, state=None, search=None):
+    """The select every list of orders shares.
+
+    One method because `all` and `page` must agree on what a search matches — two
+    copies of a filter is how a list route ends up searching on a column the CLI
+    does not, and the two quietly disagree.
+    """
+    from src.utils.search import Search
+
+    query = select(cls).order_by(cls.id.desc())
+
+    if user_id is not None:
+      query = query.where(cls.user_id == user_id)
+    if state is not None:
+      query = query.where(cls.state == state)
+
+    match = Search.match(
+      Search.equals_int(cls.id, search),
+      Search.like(cls.reference, search),
+    )
+
+    if match is not None:
+      query = query.where(match)
+
+    return query
+
+  @classmethod
+  def page(cls, db, user_id=None, state=None, limit=None, offset=None, search=None):
+    """One page of orders, and the total before paging.
+
+    Separate from `all` because `all` is what the sync and the CLI read, and it
+    has to keep returning a plain list. Only the HTTP list routes need the count.
+    """
+    from src.models.paging import Paging
+
+    return Paging.run(db, cls._filtered(user_id, state, search), limit, offset)
 
   @classmethod
   def create(cls, db, user_id, client_id=None, note=None):

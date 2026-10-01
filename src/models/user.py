@@ -156,9 +156,41 @@ class User(Base):
     return user
 
   @classmethod
-  def all(cls, db):
-    """Every user, ordered by username."""
-    return list(db.execute(select(cls).order_by(cls.username)).scalars())
+  def all(cls, db, limit=None, offset=None, search=None):
+    """Every user, ordered by username, optionally narrowed and paged.
+
+    `search` matches the username. Nothing else is searched: an admin listing
+    users is looking for a name, and the credentials and chats beside it are
+    deliberately not matchable text.
+    """
+    from src.models.paging import Paging
+
+    return list(db.execute(Paging.apply(cls._filtered(search), limit, offset)).scalars())
+
+  @classmethod
+  def page(cls, db, limit=None, offset=None, search=None):
+    """One page of users, and the total before paging.
+
+    Separate from `all` because `all` is what the CLI reads and it has to keep
+    returning a plain list. Only the admin list route needs the count.
+    """
+    from src.models.paging import Paging
+
+    return Paging.run(db, cls._filtered(search), limit, offset)
+
+  @classmethod
+  def _filtered(cls, search=None):
+    """The select every list of users shares."""
+    from src.utils.search import Search
+
+    query = select(cls).order_by(cls.username)
+
+    match = Search.match(Search.like(cls.username, search))
+
+    if match is not None:
+      query = query.where(match)
+
+    return query
 
   @classmethod
   def delete(cls, db, username):
@@ -262,6 +294,40 @@ class User(Base):
     from src.models.setting import Setting
 
     return Setting.set(db, self.id, key, value)
+
+  # --- language -------------------------------------------------------
+
+  def locale(self, db):
+    """Which language this user reads, and is written to.
+
+    Read from the settings store rather than a column, so a language can be
+    added without a migration. Anything unrecognised falls back to the default
+    rather than raising: a stored value can be wrong, and a wrong language is a
+    rough edge rather than a reason to refuse to send somebody their stock
+    alert.
+    """
+    from src.i18n import Locale
+    from src.models.setting import LOCALE_KEY
+
+    return Locale.of(self.setting(db, LOCALE_KEY))
+
+  def set_locale(self, db, locale):
+    """Remember this user's language.
+
+    Raises:
+        ValueError: If `locale` is not one of `Locale.ALL`. Rejected rather than
+          silently defaulted, because this is the API accepting bad input, not a
+          hand-edited row.
+    """
+    from src.i18n import Locale
+    from src.models.setting import LOCALE_KEY
+
+    if not Locale.is_valid(locale):
+      raise ValueError(
+        f"Unknown locale '{locale}'; expected one of {', '.join(Locale.ALL)}."
+      )
+
+    return self.set_setting(db, LOCALE_KEY, locale)
 
   def credentials(self):
     """This user's sawa9ly credentials.

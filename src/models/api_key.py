@@ -4,7 +4,7 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, select
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, or_, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db import Base, utcnow
@@ -75,13 +75,48 @@ class ApiKey(Base):
     ).scalar_one_or_none()
 
   @classmethod
-  def all(cls, db, user_id=None):
-    """Every key, optionally narrowed to one user."""
+  def all(cls, db, user_id=None, limit=None, offset=None, search=None):
+    """Every key, optionally narrowed to one user, optionally narrowed and paged.
+
+    `search` matches the prefix or the label. **Not the key itself** — only its
+    hash is stored, so there is nothing to match against, and a search that
+    appeared to work on the plaintext would be a promise the database cannot keep.
+    """
+    from src.models.paging import Paging
+
+    return list(db.execute(
+      Paging.apply(cls._filtered(user_id, search), limit, offset)
+    ).scalars())
+
+  @classmethod
+  def page(cls, db, user_id=None, limit=None, offset=None, search=None):
+    """One page of API keys, and the total before paging.
+
+    Separate from `all` because `all` is what the CLI reads and it keeps
+    returning a plain list. Only the HTTP list routes need the count.
+    """
+    from src.models.paging import Paging
+
+    return Paging.run(db, cls._filtered(user_id, search), limit, offset)
+
+  @classmethod
+  def _filtered(cls, user_id=None, search=None):
+    """The select every list of API keys shares."""
+    from src.utils.search import Search
+
     query = select(cls).order_by(cls.id)
     if user_id is not None:
       query = query.where(cls.user_id == user_id)
 
-    return list(db.execute(query).scalars())
+    match = Search.match(
+      Search.like(cls.prefix, search),
+      Search.like(cls.label, search),
+    )
+
+    if match is not None:
+      query = query.where(match)
+
+    return query
 
   # --- state ---------------------------------------------------------
 

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.controllers.dependencies import Dependencies
-from src.schemas import PageCreateIn, PageOut, PageUpdateIn
+from src.schemas import Page, PageCreateIn, PageOut, PageUpdateIn
 from src.services import LandingPageService, PageError
 
 
@@ -43,14 +43,20 @@ class PageController:
     except PageError as error:
       raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error))
 
-  @router.get("", response_model=list[PageOut])
-  def list_pages(user=Depends(Dependencies.get_any_user),
+  @router.get("", response_model=Page[PageOut])
+  def list_pages(q: str | None = None, limit: int | None = None,
+                 offset: int | None = None,
+                 user=Depends(Dependencies.get_any_user),
                  db: Session = Depends(Dependencies.get_db)):
-    """The caller's own pages, newest first."""
-    return [
-      PageController._out(page)
-      for page in LandingPageService.list(db, user.id)
-    ]
+    """The caller's own pages, newest first.
+
+    `q` searches the title and the product id; `limit` and `offset` page the
+    result. All three are optional, and passing none of them returns every row.
+    """
+    from src.models import LandingPage as PageRow
+
+    return PageRow.page(db, user_id=user.id, limit=limit, offset=offset,
+                        search=q).as_dict(PageController._out)
 
   @router.post("", response_model=PageOut, status_code=status.HTTP_201_CREATED)
   def create(body: PageCreateIn, user=Depends(Dependencies.get_any_user),

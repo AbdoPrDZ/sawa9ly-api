@@ -1,5 +1,5 @@
-import { request } from './client'
-import type { Order } from './types'
+import { listQuery, request } from './client'
+import type { ListQuery, Order, PageResult } from './types'
 
 /** A user's own orders.
  *
@@ -8,8 +8,9 @@ import type { Order } from './types'
  * from here, so that stays with the CLI and the API.
  */
 
-export function listOrders() {
-  return request<Order[]>('/orders')
+/** One page of your own orders. `query.q` searches the order id and reference. */
+export function listOrders(query: ListQuery = {}) {
+  return request<PageResult<Order>>(`/orders${listQuery(query)}`)
 }
 
 export function getOrder(orderId: number) {
@@ -24,8 +25,8 @@ export function getOrder(orderId: number) {
  * questions and need different credentials, and the caller has to be able to
  * tell which one it is asking for.
  */
-export function listAllOrders() {
-  return request<Order[]>('/admin/orders')
+export function listAllOrders(query: ListQuery = {}) {
+  return request<PageResult<Order>>(`/admin/orders${listQuery(query)}`)
 }
 
 /** One order, whoever owns it. Super only. */

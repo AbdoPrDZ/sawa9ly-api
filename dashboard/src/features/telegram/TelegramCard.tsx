@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { getBinding, issueLink, sendTest, unbind } from '../../api/telegram'
 import type { TelegramBinding, TelegramLink } from '../../api/types'
 import { Banner } from '../../components/Banner'
-import { Spinner } from '../../components/Spinner'
+import { MessageSpinner } from '../../components/Spinner'
+import { useI18n } from '../../i18n/useI18n'
 
 /** Linking this user's account to a Telegram chat.
  *
@@ -10,8 +11,12 @@ import { Spinner } from '../../components/Spinner'
  * only as a hash — the same contract an API key has. Losing it is not a problem:
  * "Get a new link" makes a new one, and issuing one does not unbind the chat the
  * user already had.
+ *
+ * The card spans the profile grid, because the explanation of how to use the link
+ * is longer than a column is wide.
  */
 export function TelegramCard() {
+  const { t } = useI18n()
   const [binding, setBinding] = useState<TelegramBinding | null>(null)
   const [link, setLink] = useState<TelegramLink | null>(null)
   const [error, setError] = useState('')
@@ -23,9 +28,9 @@ export function TelegramCard() {
     try {
       setBinding(await getBinding())
     } catch (caught) {
-      setError(message(caught, 'Could not read your Telegram link.'))
+      setError(message(caught, t('error.telegram')))
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -39,7 +44,7 @@ export function TelegramCard() {
       setLink(await issueLink())
       await load()
     } catch (caught) {
-      setError(message(caught, 'Could not make a link. Is TELEGRAM_BOT_TOKEN set?'))
+      setError(message(caught, t('telegram.linkFailed')))
     } finally {
       setBusy(false)
     }
@@ -54,7 +59,7 @@ export function TelegramCard() {
       setLink(null)
       await load()
     } catch (caught) {
-      setError(message(caught, 'Could not unlink your chat.'))
+      setError(message(caught, t('telegram.unbound')))
     } finally {
       setBusy(false)
     }
@@ -66,56 +71,56 @@ export function TelegramCard() {
     setTesting(true)
     try {
       await sendTest()
-      setNotice('Sent. Check the chat.')
+      setNotice(t('telegram.testSent'))
     } catch (caught) {
-      setError(message(caught, 'Could not send the test message.'))
+      setError(message(caught, t('telegram.testFailed')))
     } finally {
       setTesting(false)
     }
   }
 
-  if (!binding) return <Spinner label="Loading your Telegram link" />
+  if (!binding) return <MessageSpinner messageKey="loading.telegram" />
 
   return (
-    <div className="card">
-      <h3>Telegram notifications</h3>
+    <div className="card xl:col-span-2">
+      <h3 className="mb-2">{t('telegram.title')}</h3>
 
       {error ? <Banner kind="error">{error}</Banner> : null}
       {notice ? <Banner kind="success">{notice}</Banner> : null}
 
       {binding.bound ? (
         <>
-          <p className="muted">
-            Notifications go to{' '}
-            <strong>{binding.chat_title ?? binding.chat_username ?? binding.chat_id}</strong>{' '}
-            ({binding.chat_type}).
+          <p className="mb-3 max-w-prose text-sm text-muted">
+            {t('telegram.bound', {
+              chat:
+                binding.chat_title ?? binding.chat_username ?? String(binding.chat_id),
+              type: binding.chat_type ?? '',
+            })}
           </p>
-          <div className="modal-actions">
-            {/* Real notifications are not wired up yet, so this is the only way
-                to find out that a linked chat actually delivers. */}
-            <button type="button" className="ghost" disabled={testing} onClick={onTest}>
-              {testing ? 'Sending…' : 'Send a test message'}
+          {/* Real notifications are not wired up yet, so this is the only way
+              to find out that a linked chat actually delivers. */}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn" disabled={testing} onClick={onTest}>
+              {testing ? t('telegram.testBusy') : t('telegram.test')}
             </button>
-            <button type="button" className="ghost" disabled={busy} onClick={onUnbind}>
-              Unlink this chat
+            <button type="button" className="btn" disabled={busy} onClick={onUnbind}>
+              {t('telegram.unbind')}
             </button>
           </div>
         </>
       ) : (
         <>
-          <p className="muted">
-            Link a private chat with the bot, and it will be where your notifications
-            arrive. A private channel you own works too, with the bot added as an
-            admin.
-          </p>
+          <p className="mb-3 max-w-prose text-sm text-muted">{t('telegram.unboundIntro')}</p>
           {binding.code_pending ? (
-            <p>
-              Waiting for you to open the link.{' '}
-              <span className="badge">expires {formatTime(binding.code_expires_at)}</span>
+            <p className="mb-3 text-sm">
+              {t('telegram.pending')}{' '}
+              <span className="badge">
+                {t('telegram.expires', { time: formatTime(binding.code_expires_at) })}
+              </span>
             </p>
           ) : null}
-          <button type="button" className="primary" disabled={busy} onClick={getLink}>
-            {busy ? 'Working…' : binding.code_pending ? 'Get a new link' : 'Get a link'}
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={getLink}>
+            {busy ? t('telegram.working') : binding.code_pending ? t('telegram.getNewLink') : t('telegram.getLink')}
           </button>
         </>
       )}
@@ -128,41 +133,48 @@ export function TelegramCard() {
 /** The one time the link is visible.
  *
  *  The page this opens has **two** buttons, and the obvious one is the one that
- *  fails. "Start Bot" hands off to Telegram's app through the `tg://` scheme,
- *  which a browser reports as *"scheme does not have a registered handler"* on a
- *  computer with no Telegram app installed — the button then does nothing at all,
- *  silently. "Open in Web" carries the same code in a `tgaddr` fragment and works
- *  with no app, so the instruction names it rather than saying "open this link".
+ * fails. "Start Bot" hands off to Telegram's app through the `tg://` scheme,
+ * which a browser reports as *"scheme does not have a registered handler"* on a
+ * computer with no Telegram app installed — the button then does nothing at all,
+ * silently. "Open in Web" carries the same code in a `tgaddr` fragment and works
+ * with no app, so the instruction names it rather than saying "open this link".
  *
  *  The code is offered alongside for the same reason: it works in every client,
- *  installed or not.
+ * installed or not.
+ *
+ *  Both button names are left in English, in every language. They are labels
+ *  printed on a page this project does not control, so translating them would
+ *  point at a button that is not there.
  */
 function LinkPanel({ link, onDismiss }: { link: TelegramLink; onDismiss(): void }) {
+  const { t } = useI18n()
+
   return (
-    <div className="link-panel">
+    <div className="mt-5 border-t border-line pt-4">
       <Banner kind="info">
-        Open this link, then press <strong>Open in Web</strong> on the page that
-        comes up. It is shown once and cannot be recovered.
+        {t('telegram.linkIntro', { action: t('telegram.openInWeb') })}
       </Banner>
-      <code className="copyable">{link.url}</code>
-      <p className="muted">
-        Code <strong>{link.code}</strong>, good until {formatTime(link.expires_at)}. It stops
-        working once used, or when it expires.
+      <code className="secret">{link.url}</code>
+      <p className="max-w-prose text-sm text-muted">
+        {t('telegram.codeLine', {
+          code: link.code,
+          time: formatTime(link.expires_at),
+        })}
       </p>
-      <p className="muted">
-        Do not press <strong>Start Bot</strong> — that one needs Telegram installed on this
-        computer, and does nothing at all without it. <strong>Open in Web</strong> works
-        either way. If you would rather not use the link, open the bot in the Telegram app
-        or at <strong>web.telegram.org</strong> and send <strong>{link.code}</strong> as a
-        message.
+      <p className="max-w-prose text-sm text-muted">
+        {t('telegram.notStartBot', {
+          action: t('telegram.startBot'),
+          site: 'web.telegram.org',
+          code: link.code,
+        })}
       </p>
-      <p className="muted">
-        Nothing arrives until <code>python main.py telegram listen</code> is running — that is
-        what receives the message.
+      <p className="max-w-prose text-sm text-muted">
+        {t('telegram.listenHint')}{' '}
+        <code>python main.py telegram listen</code>
       </p>
       <div className="modal-actions">
-        <button type="button" className="ghost" onClick={onDismiss}>
-          Done
+        <button type="button" className="btn" onClick={onDismiss}>
+          {t('generic.done')}
         </button>
       </div>
     </div>

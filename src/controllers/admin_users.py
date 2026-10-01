@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from src.controllers.dependencies import Dependencies
 from src.models import Role, User
-from src.schemas import AdminUserCreateIn, AdminUserIn, AdminUserOut
+from src.schemas import AdminUserCreateIn, AdminUserIn, AdminUserOut, Page
 from src.services import Accounts
 
 
@@ -19,11 +19,18 @@ class AdminUsersController:
 
   router = APIRouter(prefix="/admin/users", tags=["admin"])
 
-  @router.get("", response_model=list[AdminUserOut])
-  def list_users(_admin=Depends(Dependencies.require_admin),
+  @router.get("", response_model=Page[AdminUserOut])
+  def list_users(q: str | None = None, limit: int | None = None,
+                 offset: int | None = None,
+                 _admin=Depends(Dependencies.require_admin),
                  db: Session = Depends(Dependencies.get_db)):
-    """Every user, with the counts the dashboard shows."""
-    return [AdminUsersController._out(user) for user in User.all(db)]
+    """Every user, with the counts the dashboard shows.
+
+    `q` searches the username; `limit` and `offset` page the result. All three
+    are optional, and passing none of them returns every row.
+    """
+    return User.page(db, limit=limit, offset=offset,
+                     search=q).as_dict(AdminUsersController._out)
 
   @router.post("", response_model=AdminUserOut, status_code=status.HTTP_201_CREATED)
   def create_user(body: AdminUserCreateIn, admin=Depends(Dependencies.require_admin),

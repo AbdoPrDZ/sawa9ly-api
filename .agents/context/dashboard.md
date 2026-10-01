@@ -67,7 +67,7 @@ who answers it:
 
 | Prefix | Answers | Notes |
 | --- | --- | --- |
-| `/api/...` | the API | `/api/v1` is the machine contract, `/api/auth` and `/api/admin` the dashboard's own |
+| `/api/...` | the API | `/api/v1` is the machine contract, `/api/auth`, `/api/keys` and `/api/admin` the dashboard's own |
 | `/dashboard/...` | this app | assets at `/dashboard/assets`, every other path the shell |
 | `/pages/{public_id}` | a published landing page | HTML for anyone with the link; a catch-all registered **last**. `/pages` bare and the root both 404 with a **page**, not JSON |
 
@@ -204,12 +204,21 @@ Every route below is relative to the `/dashboard` basename.
 | `/clients` | `Clients` | every signed-in user |
 | `/pages` | `Pages` | every signed-in user |
 | `/users` | `Users` | administrators |
-| `/keys` | `ApiKeys` | administrators |
+| `/keys` | `ApiKeys` | every signed-in user |
 
 **A plain user is not locked out.** They get the same shell with only their
-profile, because managing their own account is not something an administrator
-should have to unlock. `TopBar` omits the admin links for them, and the admin
-routes redirect to `/profile` rather than letting a request fail with a 403.
+profile, their language and their own API keys, because managing their own
+account is not something an administrator should have to unlock. `Sidebar` omits the admin link
+for them, and `/users` redirects to `/profile` rather than letting a request
+fail with a 403.
+
+`/keys` is on the self-service list deliberately. A key is the caller's own
+credential, so every account mints and revokes its own without an admin in the
+room. The page adapts to the role rather than hiding: an admin lists every user's
+keys and a plain user only their own (the `User` column goes away with the wider
+view), and only a `super` is offered the picker to issue a key in somebody else's
+name. That last one is a real permission, not a UI choice — see
+`domains/authentication.md`.
 
 The profile page is the self-service surface: the dashboard password, the
 sawa9ly email and password, and a **Log in to sawa9ly** button that creates or
@@ -410,8 +419,54 @@ ask which.
 - The API surface is declared once per resource in `src/api/` and the UI never
   calls `fetch` directly. That is what keeps every error, auth header and
   token-storage touch in one file.
-- Styling is plain CSS in `src/styles.css` with custom properties for the
-  palette. There is no CSS framework — a dashboard does not justify one, and it
-  keeps the bundle at a size that is not worth optimising.
+- Styling is **Tailwind CSS v4**, wired in as a Vite plugin rather than PostCSS, so
+  there is no `tailwind.config.js` to drift out of step with the tokens. The whole
+  design system is `src/styles.css`: an `@theme` block holding the palette, the
+  radii, the shadows and the four keyframe animations, a `@layer base` for bare
+  element defaults, and a small `@layer components` for the patterns that repeat
+  — `.btn`, `.badge`, `.card`, `.panel`, `.data-table`, `.banner`, `.menu`. A page
+  uses utilities for one-off layout and those classes for anything it repeats;
+  the classes exist so a button is not twenty utilities in twelve files.
+- **The palette is one dark neutral ramp, one accent, and three semantic colours**
+  that only mean success, attention or failure. Adding a colour per screen is what
+  makes an interface look busy rather than designed.
+- **Motion is restrained on purpose**: a page fades up on entry, a dialog rises,
+  a drawer slides, the loading ring turns, and everything else is a 150ms
+  `transition-colors` on hover. Every animation is behind
+  `prefers-reduced-motion`.
+- **A dialog is rendered into `document.body` through a portal, and that is
+  load-bearing.** A page holds a transform while it fades up, and any element
+  with a transform becomes the containing block for `position: fixed`
+  descendants — so a `fixed inset-0` backdrop rendered inside the page is laid
+  out against the page box instead of the viewport, lands in the wrong place, and
+  can push its own buttons outside the backdrop where they cannot be clicked. For
+  the same reason `--animate-fade-up` uses `backwards`, not `both`: `both` keeps
+  the final keyframe applied after the animation ends, and a final
+  `transform: none` still computes to an identity matrix, which is enough to
+  re-create the containing block.
 - Presentational pieces live in `src/components/`, one per file; pages stay
-  focused on data and state.
+  focused on data and state. `AppShell` owns the layout and the mobile drawer's
+  open state, `Sidebar` owns the navigation, and `UserMenu` owns the avatar
+  dropdown — three files rather than one `Layout` with three reasons to change.
+- **Every user-facing string goes through `t()` from `useI18n()`.** There are no
+  inline English strings left in a page, a component or a modal, and a
+  `MessageSpinner` exists so a loading label is a key rather than a string. The
+  only English left on screen is deliberate and listed in `domains/i18n.md`:
+  CLI commands in `<code>`, the two Telegram button names, and a product's own
+  title.
+- **The language is the account's, not the browser's**, and it arrives on the
+  signed-in user — see `domains/i18n.md` for why, and for the `localStorage`
+  fallback that covers the login screen only.
+- **The language picker is on the profile page**, not in the avatar menu. It is a
+  server-side setting that also decides the language of the user's notifications,
+  so it belongs with the other account settings rather than in a global-looking
+  menu; one place to change it, not two.
+- **`session.refresh()`** exists because of that: the shell reads the language
+  from the session, so a `PATCH /me/profile` that changes it has to be followed by
+  a re-read, or the page switches language while the shell around it does not.
+  It is separate from `invalidate()`, which signs out.
+- **CSS must use logical properties** — `ms-`/`me-`, `ps-`/`pe-`, `start-`/`end-`,
+  `text-start`, `border-s`/`border-e` — because `dir="rtl"` is what mirrors the
+  interface for Arabic, and it only works if nothing is pinned to a side. In
+  `styles.css` that means `inset-inline-end` on `.menu` and `text-align: start` on
+  `.data-table th` rather than `right` and `left`.

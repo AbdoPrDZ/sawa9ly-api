@@ -378,11 +378,14 @@ class Tracking:
     messages about it is the sort of thing that gets a bot muted. Which fields
     moved is decided in `src/services/notifications.py` and listed in one message.
 
+    That module returns **one notification per language** the watchers read, so
+    this returns a list — empty when there was nothing worth saying.
+
     `previous` is read before the save for exactly this reason — a price raised
     after the fact is the price, and the old one is gone.
     """
     if bot is None:
-      return None
+      return []
 
     from src.services.notifications import Notifications
 
@@ -397,7 +400,7 @@ class Tracking:
       logger.error(
         "could not notify watchers of product %s: %s", product.product_id, error
       )
-      return None
+      return []
 
   # --- helpers --------------------------------------------------------
 

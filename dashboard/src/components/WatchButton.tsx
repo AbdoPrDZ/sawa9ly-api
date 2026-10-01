@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { listTrackers, unwatch, watch } from '../api/trackers'
+import { apiErrorMessage } from '../i18n/apiError'
+import { useI18n } from '../i18n/useI18n'
 
 interface WatchButtonProps {
   productId: number
@@ -14,6 +16,10 @@ interface WatchButtonProps {
  *
  * Watching is a subscription the queue acts on, not a fetch: nothing is
  * requested from the site here, so the button is safe to press repeatedly.
+ *
+ * In a table row it draws as a badge, because a column of buttons is a column of
+ * noise and the state itself is the information. On a product's own page, where
+ * it is the only control of its kind, it is an ordinary button.
  */
 export function WatchButton({
   productId,
@@ -23,6 +29,7 @@ export function WatchButton({
   size = 'normal',
 }: WatchButtonProps) {
   const [busy, setBusy] = useState(false)
+  const { t } = useI18n()
 
   async function toggle() {
     setBusy(true)
@@ -36,7 +43,7 @@ export function WatchButton({
         onChanged(true)
       }
     } catch (caught) {
-      onError(caught instanceof Error ? caught.message : 'Could not update the watch.')
+      onError(apiErrorMessage(caught, t, 'product.watchFailed'))
       // The server is the truth about the current state, so re-read rather than
       // leaving the button showing whatever the failed attempt intended.
       try {
@@ -51,16 +58,23 @@ export function WatchButton({
     }
   }
 
-  const className = watching
-    ? size === 'small'
-      ? 'badge badge-active toggle'
-      : 'primary'
-    : size === 'small'
-      ? 'ghost toggle'
-      : 'ghost'
+  const className =
+    size === 'small'
+      ? watching
+        ? 'badge badge-ok cursor-pointer'
+        : 'btn btn-ghost btn-sm'
+      : watching
+        ? 'btn btn-primary'
+        : 'btn'
 
   return (
-    <button type="button" className={className} disabled={busy} onClick={toggle}>
+    <button
+      type="button"
+      className={className}
+      disabled={busy}
+      aria-pressed={watching}
+      onClick={toggle}
+    >
       {busy ? '…' : watching ? 'Watching' : 'Track'}
     </button>
   )

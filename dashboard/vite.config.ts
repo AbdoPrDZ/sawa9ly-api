@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 // The API this dev server talks to. Not configurable on purpose: development
 // runs both on the same machine, and a wrong value here fails as a confusing
@@ -52,7 +53,11 @@ export default defineConfig({
   // Their names stay stable across builds, which is what a favicon wants —
   // browsers cache those hard, and a hashed name would change on every build.
   publicDir: 'assets',
-  plugins: [react()],
+  // Tailwind is a Vite plugin rather than a PostCSS one: it scans the source for
+  // class names and emits the CSS itself, so there is no second build step to
+  // keep configured and no `tailwind.config.js` to drift out of step with the
+  // tokens in `src/styles.css`.
+  plugins: [react(), tailwindcss()],
   build: {
     outDir: 'dist',
     emptyOutDir: true,

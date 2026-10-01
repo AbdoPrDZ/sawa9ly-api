@@ -41,6 +41,7 @@ from src.controllers import (
 )
 from src.controllers.dashboard_log import DashboardLogger
 from src.controllers.dependencies import Dependencies
+from src.controllers.keys import ApiKeysController
 from src.models import Role, User
 from src.utils.livewire import Livewire, ensure_db
 from src.version import VERSION
@@ -73,6 +74,18 @@ DASHBOARD_BASE = "/dashboard"
 PROJECT_ROOT = Config.PROJECT_ROOT
 DASHBOARD_DIST = PROJECT_ROOT / "dashboard" / "dist"
 DASHBOARD_INDEX = DASHBOARD_DIST / "index.html"
+
+#: The dashboard's dark palette, named here so this placeholder page and the
+#: stylesheet it points at cannot drift apart. These are the same four values as
+#: the `:root` block in `dashboard/src/styles.css`; the page below is a hand-written
+#: f-string with no stylesheet to inherit from, so the numbers have to exist on
+#: both sides. Changing the palette means changing them here too.
+DASHBOARD_CANVAS = "#0b0d10"
+DASHBOARD_INK = "#e9ecf1"
+DASHBOARD_MUTED = "#8b95a4"
+#: The brand amber. Filled surfaces use the `solid` variant; this is the one
+#: read as text, on the near-black canvas.
+DASHBOARD_ACCENT = "#ffc107"
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -124,20 +137,25 @@ def create_app():
 
   app.include_router(versioned)
 
-  # The dashboard's own surface, deliberately NOT versioned. `/auth` and
-  # `/admin` are reachable only with a dashboard token, and the sole caller is
+  # The dashboard's own surface, deliberately NOT versioned. `/auth`, `/keys`
+  # and `/admin` are reachable only with a dashboard token, and the sole caller is
   # the dashboard in dashboard/ — there is no second consumer to keep compatible,
   # and versioning a private endpoint only buys a migration nobody needs. They
   # share the outer `/api` with everything else, and their own `/auth` and
   # `/admin` segments, so their paths read as `/api/auth/login` and
   # `/api/admin/users`.
   #
-  # `require_admin` is the usual floor here; `/api/admin/orders` asks for
-  # `require_super`, because it is the one route that crosses user boundaries.
+  # `require_admin` is the floor for `/admin`; `/auth` and `/keys` are the
+  # self-service surface and ask for `require_user`, because a user managing
+  # their own profile or their own keys needs no permission for it. Two routes
+  # ask for `require_super`, because they cross a user boundary in a way an
+  # admin must not reach: another user's orders, and issuing a key in somebody
+  # else's name.
   dashboard_api = APIRouter(prefix=API_BASE)
 
   for controller in (
-    AuthController, AdminUsersController, AdminKeysController, AdminOrdersController
+    AuthController, ApiKeysController,
+    AdminUsersController, AdminKeysController, AdminOrdersController
   ):
     dashboard_api.include_router(controller.router)
 
@@ -280,19 +298,19 @@ def _mount_root(app):
         min-height: 100vh;
         display: grid;
         place-items: center;
-        background: #0f1216;
-        color: #e6e9ee;
+        background: {DASHBOARD_CANVAS};
+        color: {DASHBOARD_INK};
         font: 16px/1.6 system-ui, sans-serif;
       }}
       main {{ text-align: center; padding: 2rem; }}
       h1 {{ font-size: 1.4rem; margin: 0 0 0.5rem; }}
-      p {{ color: #8b95a3; margin: 0; }}
+      p {{ color: {DASHBOARD_MUTED}; margin: 0; }}
     </style>
   </head>
   <body>
     <main>
       <h1>sawa9ly</h1>
-      <p>The dashboard is at <a style="color: #4f8cff" href="{DASHBOARD_BASE}/">{DASHBOARD_BASE}/</a>.</p>
+      <p>The dashboard is at <a style="color: {DASHBOARD_ACCENT}" href="{DASHBOARD_BASE}/">{DASHBOARD_BASE}/</a>.</p>
     </main>
   </body>
 </html>

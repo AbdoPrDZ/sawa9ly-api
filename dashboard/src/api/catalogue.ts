@@ -1,10 +1,11 @@
-import { request } from './client'
-import type { CatalogueProduct } from './types'
+import { listQuery, request } from './client'
+import type { CatalogueProduct, ListQuery, PageResult } from './types'
 
 /** The saved catalogue. Reading is open; saving scrapes the live site. */
 
-export function listProducts() {
-  return request<CatalogueProduct[]>('/catalogue')
+/** One page of saved products. `query.q` searches the sawa9ly id and the title. */
+export function listProducts(query: ListQuery = {}) {
+  return request<PageResult<CatalogueProduct>>(`/catalogue${listQuery(query)}`)
 }
 
 export function getProduct(productId: number) {

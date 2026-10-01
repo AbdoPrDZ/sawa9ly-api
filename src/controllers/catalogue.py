@@ -3,10 +3,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.controllers.dependencies import Dependencies
-from src.schemas import ProductSaveIn
+from src.schemas import Page, ProductOut, ProductSaveIn
 from src.services import Product
-from src.utils import Livewire
-from src.utils.livewire import LivewireError
+from src.utils import Livewire, LivewireError, PageNotFound
 
 
 class CatalogueController:
@@ -38,7 +37,22 @@ class CatalogueController:
 
     try:
       return Product(product_id, Livewire(username)).get_info()
+    except PageNotFound as error:
+      # Before this was its own case, the site answering 404 escaped as a bare
+      # 500 with a traceback in the message. It is not a broken site and it is
+      # not a bad request in the API sense either: the id asked for is simply not
+      # a product, which is a 404, and the only useful thing to say about it is
+      # which id failed and where to check it.
+      raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"Product {product_id} does not exist on sawa9ly.app. "
+               "Check the id in the product's URL on the site.",
+      ) from error
     except LivewireError as error:
+      # Everything else about reaching the site: an expired session it would not
+      # refresh, a timeout, a connection it refused, HTML it would not parse.
+      # The site is unusable rather than the product absent, which is what a 502
+      # is for.
       raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error))
 
 
@@ -61,12 +75,22 @@ class CatalogueController:
 
     return product
 
-  @router.get("", response_model=list)
-  def list_products(db=Depends(Dependencies.get_db)):
-    """Every saved product."""
+  @router.get("", response_model=Page[ProductOut])
+  def list_products(q: str | None = None, limit: int | None = None,
+                    offset: int | None = None,
+                    db=Depends(Dependencies.get_db)):
+    """Every saved product.
+
+    `q` searches the sawa9ly id and the title; `limit` and `offset` page the
+    result. All three are optional, and passing none of them returns every row —
+    the rows are under `items` either way, because a count cannot be carried in a
+    bare array.
+    """
     from src.models import Product as ProductRow
 
-    return [p.as_dict() for p in ProductRow.all(db)]
+    return ProductRow.page(db, limit=limit, offset=offset, search=q).as_dict(
+      lambda product: product.as_dict()
+    )
 
   @router.get("/{product_id}", response_model=dict)
   def read(product_id: int, db=Depends(Dependencies.get_db)):

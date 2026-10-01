@@ -12,6 +12,29 @@
     -->
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <title>Sawa9ly API Dashboard</title>
+    <script>
+      /*
+        Put the stored theme on the document before anything is painted.
+
+        The palette is a pair of `:root` blocks keyed off `data-theme`, so it
+        applies from the first frame — but only if the attribute is already there
+        when the stylesheet is. Deciding this in React would mean rendering once in
+        the default theme and correcting it, which is a white flash on every load
+        for anyone who chose light. Hence this, inline and ahead of the bundle.
+
+        The key is written out here as well as in `src/theme.ts`, which owns it
+        everywhere else. An inline script cannot import, so the two have to agree
+        the way `DASHBOARD_BASE`, `base` in vite.config.ts and `BASENAME` do.
+        Dark is the default; an unreadable or absent value falls back to it.
+      */
+      try {
+        var stored = localStorage.getItem('sawa9ly.dashboard.theme')
+        document.documentElement.dataset.theme =
+          stored === 'light' || stored === 'dark' ? stored : 'dark'
+      } catch (error) {
+        document.documentElement.dataset.theme = 'dark'
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

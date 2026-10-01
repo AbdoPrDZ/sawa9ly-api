@@ -54,6 +54,31 @@ surface `errors`.
 This is why `checkout` returns `errors` rather than raising for a rejected form:
 the site declining a form is a normal outcome to report, not an exception.
 
+## A missing page is a 404 to a logged-in visitor and a 200 to anyone else
+
+The site answers `GET /product/{id}` for an id that does not exist with its "page
+not found" page — but as a **200** when the caller is logged out, and as a real
+**404** (`raise_for_status` fails, body titled
+`الصفحة المطلوبة غير موجودة`) when the caller has a session.
+
+So **a 200 from a product page is not proof the product exists.** Every scrape
+here runs with a logged-in session, which is what makes the status meaningful, and
+`Livewire.load_html` raises `PageNotFound` on a 404 for exactly that reason.
+
+The tell-tale of this is a body size: a real product page is ~140 KB, the not-found
+page ~12 KB, and the soft-404 ~11 KB.
+
+`PageNotFound` is a subclass of `LivewireError` so a caller that does not care can
+keep catching the general case. `CatalogueController` does care, and answers
+**404 naming the id**; everything else the site does wrong is a **502**.
+
+**`raise_for_status()` must not be called outside `load_html`.** It raises
+`requests.HTTPError`, which is not a `LivewireError`, so it passes straight through
+every `except LivewireError` in the controllers and surfaces as a bare 500 with a
+traceback in the message — which is what "product 8569 gives a 500" turned out to
+be. `load_html` now wraps the whole call, which is the only reason it is a
+function rather than inline `session.get`.
+
 ## The commission floor
 
 The site refuses to advance past the cart unless the order commission is at least

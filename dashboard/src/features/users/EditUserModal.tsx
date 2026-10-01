@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import type { AdminUser, Role, UserEdits } from '../../api/types'
 import { Field } from '../../components/Field'
 import { Modal } from '../../components/Modal'
+import { useI18n } from '../../i18n/useI18n'
 
 /** Edits a user.
  *
@@ -25,6 +26,8 @@ export function EditUserModal({
   onCancel(): void
   onSubmit(edits: UserEdits): Promise<void>
 }) {
+  const { t } = useI18n()
+
   // Only `user` and `admin` are ever offered, so the state cannot hold the root
   // role. A user that has it returns early below, before the form is rendered.
   const [role, setRole] = useState<Role>(user.role === 'admin' ? 'admin' : 'user')
@@ -35,14 +38,13 @@ export function EditUserModal({
   // so the form does not pretend otherwise.
   if (!user.can_be_managed) {
     return (
-      <Modal title={`Edit ${user.username}`} onClose={onCancel}>
-        <p className="muted">
-          {user.username} is a <strong>{user.role}</strong> account. Super accounts are managed
-          from the environment or the CLI, not from the dashboard.
+      <Modal title={t('user.editTitle', { name: user.username })} onClose={onCancel}>
+        <p className="text-sm text-muted">
+          {t('user.editSuperBody', { name: user.username, role: user.role })}
         </p>
         <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onCancel}>
-            Close
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>
+            {t('generic.close')}
           </button>
         </div>
       </Modal>
@@ -65,26 +67,22 @@ export function EditUserModal({
   }
 
   return (
-    <Modal title={`Edit ${user.username}`} onClose={onCancel}>
+    <Modal title={t('user.editTitle', { name: user.username })} onClose={onCancel}>
       <form onSubmit={submit}>
-        <Field label="Role" hint={isSelf ? 'You cannot change your own role.' : undefined}>
+        <Field label={t('user.fieldRole')} hint={isSelf ? t('user.fieldRoleSelf') : undefined}>
           <select
             value={role}
             onChange={(event) => setRole(event.target.value as Role)}
             disabled={isSelf}
           >
-            <option value="user">user</option>
-            <option value="admin">admin</option>
+            <option value="user">{t('role.user')}</option>
+            <option value="admin">{t('role.admin')}</option>
           </select>
         </Field>
 
         <Field
-          label="New dashboard password"
-          hint={
-            isSelf
-              ? 'Leave empty to keep the current one.'
-              : 'Leave empty to keep the current one. Their sawa9ly email and password are their own to set, from their profile.'
-          }
+          label={t('user.fieldNewPassword')}
+          hint={isSelf ? t('user.fieldNewPasswordSelf') : t('user.fieldNewPasswordOther')}
         >
           <input
             type="password"
@@ -95,11 +93,11 @@ export function EditUserModal({
         </Field>
 
         <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onCancel}>
-            Cancel
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>
+            {t('generic.cancel')}
           </button>
-          <button type="submit" className="primary" disabled={busy}>
-            {busy ? 'Saving…' : 'Save changes'}
+          <button type="submit" className="btn btn-primary" disabled={busy}>
+            {busy ? t('generic.saving') : t('generic.save')}
           </button>
         </div>
       </form>

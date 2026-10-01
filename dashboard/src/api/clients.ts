@@ -1,5 +1,5 @@
-import { request } from './client'
-import type { Client, NewClient } from './types'
+import { listQuery, request } from './client'
+import type { Client, ListQuery, NewClient, PageResult } from './types'
 
 /** The signed-in user's delivery recipients.
  *
@@ -7,8 +7,9 @@ import type { Client, NewClient } from './types'
  * clients whichever credential presented them.
  */
 
-export function listClients() {
-  return request<Client[]>('/clients')
+/** One page of recipients. `query.q` searches the name and the phone number. */
+export function listClients(query: ListQuery = {}) {
+  return request<PageResult<Client>>(`/clients${listQuery(query)}`)
 }
 
 /**

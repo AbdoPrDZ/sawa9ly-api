@@ -28,19 +28,36 @@ version; they move independently.
 Three groups sit under `/api` but carry **no version**, and the reason differs in
 each case:
 
-- **`/api/auth` and `/api/admin`** — the dashboard's own API. `dashboard/` is the
-  only caller, so there is no second consumer to keep compatible. They are mounted
-  through a second router that takes `API_BASE` but not `API_PREFIX`, which is why
-  their paths read as `/api/auth/login` and `/api/admin/users`.
+- **`/api/auth`, `/api/keys` and `/api/admin`** — the dashboard's own API.
+  `dashboard/` is the only caller, so there is no second consumer to keep
+  compatible. They are mounted through a second router that takes `API_BASE` but
+  not `API_PREFIX`, which is why their paths read as `/api/auth/login` and
+  `/api/admin/users`.
 - **`/api/health`** — what a load balancer or container health check points at, and
   those are configured against a fixed path. Versioning it breaks them silently,
   so it is declared inline on the app rather than through either router.
 - **`/api/me`** — the meta route that echoes back who a key belongs to.
 
-The split follows the credential, not the resource: `require_admin` and
-`get_token_user` mean dashboard-only, `get_current_user` means machine-facing,
-and `get_any_user` (trackers) counts as machine-facing because it also accepts an
-API key.
+The split follows the credential, not the resource: `require_admin`,
+`require_user` and `get_token_user` mean dashboard-only, `get_current_user` means
+machine-facing, and `get_any_user` (trackers) counts as machine-facing because it
+also accepts an API key.
+
+**`require_user` is the self-service floor** and it is not a softer `require_admin`.
+A user managing their own profile or their own API keys needs no permission for
+it, so `/api/auth/me/*` and `/api/keys` are gated on being signed in at all.
+Gating them on admin would answer 403 for a perfectly legitimate request and make
+an ordinary account look like it lacked a permission it was never asking for.
+Inside the unversioned group the three levels are therefore: `require_user` (any
+signed-in account, own resources only), `require_admin` (`/admin`, across
+accounts), `require_super` (the two routes that cross a user boundary in a way an
+admin must not reach — another user's orders, and issuing a key in somebody else's
+name).
+
+`SessionUserOut` carries `locale`. It is on the login response rather than only on
+the profile because the dashboard's shell has to set the document language and
+direction before it renders anything, and it cannot wait for a second request —
+see `domains/i18n.md`. `ProfileIn` accepts it for the same reason.
 
 Adding a machine route means: pick the controller, register the path relative to
 the resource, and **do not** add `/api` or `/api/v1` — the parent applies them.
@@ -170,3 +187,12 @@ the real one.
 `OrderError` carries the domain refusals and maps to 409; anything unexpected
 from the site layer surfaces as 502. `LivewireError` carries transport and
 validation problems from the site.
+
+**A 500 is a bug, never an answer.** It means an exception nobody expected reached
+FastAPI — and the message it carries is a traceback, so it leaks internals to
+whatever is calling. The one that actually happened: a product id the site does not
+have produced `requests.HTTPError` from `raise_for_status`, which is not a
+`LivewireError` and so passed through every `except LivewireError` in the
+controllers. `Livewire.load_html` now translates the whole call — see
+`domains/checkout.md`, which records why the site's 404 is the right answer here
+and why a 200 would not have been.

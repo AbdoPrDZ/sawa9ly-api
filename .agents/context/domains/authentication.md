@@ -105,7 +105,9 @@ The admin dashboard is the only thing that uses this mechanism.
 - **401 means "not signed in", 403 means "signed in but not an admin".** Keeping
   them apart is what lets the dashboard show the right message.
 - **The API keys are still how machines authenticate.** The dashboard does not
-  create keys for itself and an admin token does not work on the product routes.
+  use an admin token on the product routes. It *does* manage keys, but through
+  the caller's own `/api/keys` for anybody and the super-only admin route for
+  somebody else — see "A key is the caller's own credential" below.
 - The first admin is created from the CLI, not through the API, because the admin
   routes need an admin to exist first:
   `user add <name> --login-password <pw>` then `user set-role <name> admin`.
@@ -129,12 +131,49 @@ demote or delete the account above them, so a super is only manageable through
 
 | role | may do |
 | --- | --- |
-| `super` | edit and delete any user, and see who has set up their account |
-| `admin` | add users, list users, manage API keys, and manage **their own** profile. Nothing else |
-| `user` | manage their own profile only |
+| `super` | edit and delete any user, see who has set up their account, and issue a key in anybody's name |
+| `admin` | add users, list users, see and revoke **every** user's keys, and manage **their own** profile and keys |
+| `user` | manage their own profile and their own API keys only |
 
 An administrator's power is deliberately narrow: create an account and set the
 dashboard password to reach it with. That is all.
+
+## A key is the caller's own credential
+
+Issuing and revoking keys is split across two controllers, and the split *is* the
+permission model:
+
+| Route | Gate | Reaches |
+| --- | --- | --- |
+| `GET/POST /api/keys` | `require_user` | the caller's own keys, and no user in the path or body at all |
+| `DELETE /api/keys/{id}` | `require_user` | the caller's own key; anyone else's is a **404**, not a 403 |
+| `GET /api/admin/api-keys` | `require_admin` | every key for every user |
+| `DELETE /api/admin/api-keys/{id}` | `require_admin` | any key |
+| `POST /api/admin/users/{id}/api-keys` | `require_super` | a key in another user's name |
+
+So **every signed-in user can mint and drop their own keys, and only a `super`
+can mint one in somebody else's name.** The rule is enforced server-side by the
+two different gates, not by the dashboard hiding the picker — a hand-crafted
+request to `/api/admin/users/{id}/api-keys` is a 403 for an admin exactly as it is
+for a plain user.
+
+`POST /admin/users/{id}/api-keys` was `require_admin` before this and is
+`require_super` now. That tightening is the point, not a side effect: handing
+somebody a credential in their name is a root-level act, and it was reachable by
+any admin.
+
+**404 rather than 403 on somebody else's key id**, so the self-service revoke
+cannot be used to find out which keys other people hold.
+
+`/api/keys` has no user parameter anywhere, which is deliberate: there is nothing
+to point at another account. An account with **no dashboard password** cannot use
+it, because it cannot sign in to reach it — those are the API-only users, and a
+super issues their key from the admin route. That is the only reason the admin
+issue route needs to exist at all.
+
+`ApiKeysController._out` is shared: both controllers return the same
+`AdminApiKeyOut` shape so the dashboard renders one table for both views, rather
+than the same component handling two row types.
 
 **No role may set another user's sawa9ly credentials.** Not a super, not through
 the API, not through the dashboard. The fields are not on `AdminUserIn` at all, so

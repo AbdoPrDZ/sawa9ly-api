@@ -1,12 +1,21 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { ApiError, BASENAME } from '../api/client'
 import { Banner } from '../components/Banner'
 import { Field } from '../components/Field'
+import { useI18n } from '../i18n/useI18n'
 import { useSession } from '../session/useSession'
 
-/** Username and password, exchanged for a dashboard token. */
+/** Username and password, exchanged for a dashboard token.
+ *
+ * A single card, centred, because there is exactly one thing to do here and
+ * nothing to navigate to until it is done. The logo is served from the
+ * dashboard's own prefix, so the path is built from `BASENAME` like everywhere
+ * else.
+ */
 export function Login() {
   const { signIn } = useSession()
+  const { t } = useI18n()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -20,21 +29,34 @@ export function Login() {
     try {
       await signIn(username, password)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Sign in failed.')
+      // A rejected login is always a 401, and the server says the same thing for
+      // a wrong username as for a wrong password on purpose. That sentence is
+      // rebuilt here rather than shown from the server, so it arrives in the
+      // reader's language without giving anything away.
+      setError(caught instanceof ApiError && caught.status === 401 ? t('login.wrong') : t('login.failed'))
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <div className="login-page">
-      <form className="login-card" onSubmit={onSubmit}>
-          <h1>Sawa9ly API Dashboard</h1>
-        <p className="muted">Sign in to manage users and API keys.</p>
+    <div className="grid min-h-screen place-items-center p-4">
+      <form className="card w-full max-w-sm animate-fade-up p-6" onSubmit={onSubmit}>
+        <div className="mb-6">
+          <img
+            src={`${BASENAME}/logo.png`}
+            alt=""
+            width={28}
+            height={28}
+            className="mb-4 h-7 w-auto rounded object-contain"
+          />
+          <h1 className="mb-1">{t('login.title')}</h1>
+          <p className="text-sm text-muted">{t('login.subtitle')}</p>
+        </div>
 
         {error ? <Banner kind="error">{error}</Banner> : null}
 
-        <Field label="Username">
+        <Field label={t('login.username')}>
           <input
             value={username}
             onChange={(event) => setUsername(event.target.value)}
@@ -44,7 +66,7 @@ export function Login() {
           />
         </Field>
 
-        <Field label="Password" hint="Your dashboard password, not the sawa9ly one.">
+        <Field label={t('login.password')} hint={t('login.passwordHint')}>
           <input
             type="password"
             value={password}
@@ -54,8 +76,8 @@ export function Login() {
           />
         </Field>
 
-        <button type="submit" className="primary" disabled={busy}>
-          {busy ? 'Signing in…' : 'Sign in'}
+        <button type="submit" className="btn btn-primary mt-1 w-full" disabled={busy}>
+          {busy ? t('login.busy') : t('login.submit')}
         </button>
       </form>
     </div>

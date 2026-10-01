@@ -6,6 +6,8 @@
  * dev proxy in vite.config.ts exists only to reproduce that locally.
  */
 
+import type { ListQuery } from './types'
+
 /**
  * Where the dashboard itself is served from.
  *
@@ -40,13 +42,18 @@ const API_PREFIX = `${API_BASE}/v1`
  * nothing in the dashboard calls them. Adding one here rather than calling it
  * wrongly is the point.
  *
+ * `/keys` is the caller's own API keys, which every signed-in user may manage —
+ * a key belongs to the account that made it, not to an administrator. Reading
+ * or revoking *other* people's keys is `/admin/api-keys`, which is a different
+ * resource with a different gate.
+ *
  * These are matched against the path the caller passed, which is the bare
  * resource path, so the list must not carry the `API_BASE` prefix.
  *
  * Keep in step with the unversioned mounts in `create_app` in `src/server.py`.
  * The server is the authority; this is the client half of the same fact.
  */
-const UNVERSIONED = ['/auth', '/admin']
+const UNVERSIONED = ['/auth', '/keys', '/admin']
 
 /** Resolve a bare resource path to the URL to actually fetch. */
 function urlFor(path: string): string {
@@ -56,6 +63,28 @@ function urlFor(path: string): string {
 }
 
 const TOKEN_KEY = 'sawa9ly.dashboard.token'
+
+/**
+ * Turn a list screen's search box and pager into a query string.
+ *
+ * Empty, zero and absent values are dropped rather than sent, because the server
+ * treats a missing `q` as "no filter" and a `limit` of 0 as "no limit" — sending
+ * `?q=&limit=0&offset=0` would mean the opposite of what a first page wants.
+ *
+ * Returns `''` for an empty query so a caller can append it unconditionally.
+ */
+export function listQuery(params: ListQuery = {}): string {
+  const search = new URLSearchParams()
+
+  const q = params.q?.trim()
+  if (q) search.set('q', q)
+  if (params.limit !== undefined && params.limit > 0) search.set('limit', String(params.limit))
+  if (params.offset !== undefined && params.offset > 0) search.set('offset', String(params.offset))
+
+  const encoded = search.toString()
+
+  return encoded ? `?${encoded}` : ''
+}
 
 /** Carries the HTTP status, so callers can tell "signed out" from "not allowed". */
 export class ApiError extends Error {

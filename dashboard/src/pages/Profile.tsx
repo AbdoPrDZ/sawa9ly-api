@@ -1,21 +1,30 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { getProfile, sawa9lyLogin, updateProfile } from '../api/profile'
-import type { Profile } from '../api/types'
+import type { Locale, Profile, ProfileIn } from '../api/types'
 import { Banner } from '../components/Banner'
 import { Field } from '../components/Field'
+import { PageHeader } from '../components/PageHeader'
 import { RoleBadge } from '../components/RoleBadge'
-import { Spinner } from '../components/Spinner'
+import { MessageSpinner } from '../components/Spinner'
+import { apiErrorMessage } from '../i18n/apiError'
+import { useI18n } from '../i18n/useI18n'
 import { TelegramCard } from '../features/telegram/TelegramCard'
 
 /** A user's own account.
  *
  * Available to every signed-in user, whatever their role: changing your own
- * password, your own sawa9ly credentials or your own Telegram chat should never
- * need an administrator. Nobody can set these for you, which is why they are all
- * on this page and none of them are on anyone else's.
+ * password, your own sawa9ly credentials, your language or your own Telegram
+ * chat should never need an administrator. Nobody can set these for you, which
+ * is why they are all on this page and none of them are on anyone else's.
+ *
+ * Each of the four is a card, because each is a form that is submitted on its own
+ * and saves on its own — grouping them into one panel would suggest they are
+ * saved together.
  */
 export function ProfilePage() {
+  const { t, locale, languageNames, locales, setLocale, savingLocale } = useI18n()
+
   const [profile, setProfile] = useState<Profile | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -32,15 +41,17 @@ export function ProfilePage() {
       setProfile(loaded)
       setEmail(loaded.sawa9ly_email ?? '')
     } catch (caught) {
-      setError(message(caught, 'Could not load your profile.'))
+      setError(apiErrorMessage(caught, t, 'error.profile'))
     }
-  }, [])
+    // `t` is stable for a given locale, and the profile is loaded once per
+    // language rather than once per render.
+  }, [t])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  if (!profile) return <Spinner label="Loading your profile" />
+  if (!profile) return <MessageSpinner messageKey="loading.profile" />
 
   async function save(event: FormEvent) {
     event.preventDefault()
@@ -50,14 +61,14 @@ export function ProfilePage() {
 
     // Only the fields that were actually filled in. An empty box means
     // "leave it alone"; clearing a credential is done explicitly below.
-    const input: Parameters<typeof updateProfile>[0] = {}
+    const input: Partial<ProfileIn> = {}
 
     if (email !== (profile?.sawa9ly_email ?? '')) input.sawa9ly_email = email
     if (sawa9lyPassword) input.sawa9ly_password = sawa9lyPassword
     if (dashboardPassword) input.password = dashboardPassword
 
     if (Object.keys(input).length === 0) {
-      setNotice('Nothing to save.')
+      setNotice(t('profile.nothingToSave'))
       setBusy(false)
       return
     }
@@ -68,9 +79,9 @@ export function ProfilePage() {
       setEmail(updated.sawa9ly_email ?? '')
       setSawa9lyPassword('')
       setDashboardPassword('')
-      setNotice('Saved.')
+      setNotice(t('profile.saved'))
     } catch (caught) {
-      setError(message(caught, 'Could not save your profile.'))
+      setError(apiErrorMessage(caught, t, 'error.profile'))
     } finally {
       setBusy(false)
     }
@@ -86,60 +97,85 @@ export function ProfilePage() {
       setNotice(result.message)
       await load()
     } catch (caught) {
-      setError(message(caught, 'Could not log in to sawa9ly.'))
+      setError(apiErrorMessage(caught, t, 'error.profile'))
     } finally {
       setLoggingIn(false)
     }
   }
 
+  /**
+   * Save the language.
+   *
+   * Delegates entirely to the provider, which also backs it out if the server
+   * refuses. This page used to do the `PATCH` and the session refresh itself,
+   * which meant two places to keep in step — and two copies of the revert — once
+   * the top bar could switch the language too.
+   */
+  function onLocaleChange(next: Locale) {
+    setLocale(next)
+  }
+
   return (
     <section>
-      <div className="section-head">
-        <h2>My profile</h2>
+      <PageHeader title={t('profile.title')}>
         <RoleBadge role={profile.role} />
-      </div>
+      </PageHeader>
 
       {error ? <Banner kind="error">{error}</Banner> : null}
       {notice ? <Banner kind="success">{notice}</Banner> : null}
 
-      <div className="cards">
+      <div className="grid gap-4 xl:grid-cols-2">
         <div className="card">
-          <h3>Sawa9ly account</h3>
-          <p className="muted">
+          <h3 className="mb-3">{t('profile.language')}</h3>
+          <label className="block">
+            <span className="sr-only">{t('profile.language')}</span>
+            <select
+              value={locale}
+              disabled={savingLocale}
+              onChange={(event) => void onLocaleChange(event.target.value as Locale)}
+            >
+              {locales.map((option) => (
+                <option key={option} value={option}>
+                  {languageNames[option]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="mt-3 text-xs text-muted">{t('profile.languageHint')}</p>
+        </div>
+
+        <div className="card">
+          <h3 className="mb-2">{t('profile.sawa9ly')}</h3>
+          <p className="mb-3 text-sm text-muted">
             {profile.has_sawa9ly_credentials
-              ? 'Credentials are stored, so this account can place orders.'
-              : 'Add these to let this account place orders. Nobody else can set them for you.'}
+              ? t('profile.sawa9lyHas')
+              : t('profile.sawa9lyHasNot')}
           </p>
-          <p>
-            Site session:{' '}
+          <p className="mb-4 text-sm">
+            {t('profile.siteSession')}{' '}
             {profile.has_sawa9ly_session ? (
-              <span className="badge badge-active">ready</span>
+              <span className="badge badge-ok">{t('profile.sessionReady')}</span>
             ) : (
-              <span className="badge badge-expired">none</span>
+              <span className="badge badge-warn">{t('profile.sessionNone')}</span>
             )}
           </p>
           <button
             type="button"
-            className="primary"
+            className="btn btn-primary"
             disabled={loggingIn || !profile.has_sawa9ly_credentials}
             title={
-              profile.has_sawa9ly_credentials
-                ? undefined
-                : 'Add your sawa9ly email and password first'
+              profile.has_sawa9ly_credentials ? undefined : t('profile.logInNeedsCredentials')
             }
             onClick={onSawa9lyLogin}
           >
-            {loggingIn ? 'Logging in…' : 'Log in to sawa9ly'}
+            {loggingIn ? t('profile.logInBusy') : t('profile.logIn')}
           </button>
         </div>
 
         <form className="card" onSubmit={save}>
-          <h3>Change your details</h3>
+          <h3 className="mb-4">{t('profile.changeDetails')}</h3>
 
-          <Field
-            label="Sawa9ly email"
-            hint="Leave empty to keep the current one."
-          >
+          <Field label={t('profile.fieldEmail')} hint={t('profile.fieldEmailHint')}>
             <input
               type="email"
               value={email}
@@ -149,8 +185,8 @@ export function ProfilePage() {
           </Field>
 
           <Field
-            label="Sawa9ly password"
-            hint="Leave empty to keep the current one."
+            label={t('profile.fieldSawa9lyPassword')}
+            hint={t('profile.fieldSawa9lyPasswordHint')}
           >
             <input
               type="password"
@@ -161,8 +197,8 @@ export function ProfilePage() {
           </Field>
 
           <Field
-            label="Dashboard password"
-            hint="How you sign in here. Leave empty to keep the current one."
+            label={t('profile.fieldDashboardPassword')}
+            hint={t('profile.fieldDashboardPasswordHint')}
           >
             <input
               type="password"
@@ -172,9 +208,9 @@ export function ProfilePage() {
             />
           </Field>
 
-          <div className="modal-actions">
-            <button type="submit" className="primary" disabled={busy}>
-              {busy ? 'Saving…' : 'Save changes'}
+          <div className="mt-1 flex justify-end">
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? t('profile.busy') : t('profile.saveChanges')}
             </button>
           </div>
         </form>
@@ -185,6 +221,3 @@ export function ProfilePage() {
   )
 }
 
-function message(caught: unknown, fallback: string): string {
-  return caught instanceof Error ? caught.message : fallback
-}

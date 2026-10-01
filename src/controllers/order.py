@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.controllers.dependencies import Dependencies
-from src.schemas import OrderCheckoutIn, OrderCreateIn, OrderLineIn, OrderOut
+from src.schemas import OrderCheckoutIn, OrderCreateIn, OrderLineIn, OrderOut, Page
 from src.services import OrderError, OrderService
 
 
@@ -37,11 +37,20 @@ class OrderController:
     except OrderError as error:
       raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error))
 
-  @router.get("", response_model=list)
-  def list_orders(user=Depends(Dependencies.get_any_user), db=Depends(Dependencies.get_db)):
-    from src.services import OrderService as Service
+  @router.get("", response_model=Page[OrderOut])
+  def list_orders(q: str | None = None, limit: int | None = None,
+                  offset: int | None = None,
+                  user=Depends(Dependencies.get_any_user),
+                  db=Depends(Dependencies.get_db)):
+    """Your own orders, newest first.
 
-    return [o.as_dict() for o in Service.list(db, user.id)]
+    `q` searches the order id and the reference; `limit` and `offset` page the
+    result. All three are optional, and passing none of them returns every row.
+    """
+    from src.models import Order as OrderRow
+
+    return OrderRow.page(db, user_id=user.id, limit=limit, offset=offset,
+                         search=q).as_dict(lambda o: o.as_dict())
 
   @router.post("", response_model=OrderOut)
   def create(body: OrderCreateIn, user=Depends(Dependencies.get_any_user),

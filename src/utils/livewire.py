@@ -32,6 +32,11 @@ LOGIN_PATH = "/login"
 # stale one.
 AUTH_CHECK_PATH = "/panier"
 
+#: Spelled out rather than imported from FastAPI: this module is also used by
+#: the CLI and the queue, and neither of them should have to import a web
+#: framework to learn that 404 is the status for a page that is not there.
+NOT_FOUND = 404
+
 CSRF_PATTERN = re.compile(r'name="csrf-token"\s+content="([^"]+)"')
 FORM_TOKEN_PATTERN = re.compile(r'name="_token"\s+value="([^"]+)"')
 UPDATE_URI_PATTERN = re.compile(r'data-update-uri="([^"]+)"')
@@ -41,6 +46,21 @@ _db_ready = False
 
 class LivewireError(Exception):
   """Raised when a Livewire interaction cannot be completed."""
+
+
+class PageNotFound(LivewireError):
+  """The site answered, and said this page is not there.
+
+  A subclass rather than a flag, because "that product does not exist" and "the
+  site is broken" need different answers and only the caller knows which it was
+  asked. A caller that does not care can keep catching `LivewireError` and get
+  the same behaviour it had.
+
+  Worth its own class because the site answers a **logged-out** visitor with a
+  soft 404: a `200` carrying its "page not found" page. So the status alone is
+  only meaningful with a session, and a scrape cannot treat `200` as proof that
+  something exists.
+  """
 
 
 def ensure_db():
@@ -146,7 +166,27 @@ class Livewire:
       self.refresh_session()
       response = self.session.get(url)
 
-    response.raise_for_status()
+    # A transport failure is translated here rather than allowed to escape,
+    # because `raise_for_status` raises `requests.HTTPError` and no caller
+    # catches that: it is not a `LivewireError`, so it went straight through
+    # every `except LivewireError` in the controllers and surfaced as a bare 500
+    # with a traceback in the message. This is the only place in the module that
+    # lets a `requests` exception out, and it is the reason this function is
+    # here rather than inline.
+    if response.status_code == NOT_FOUND:
+      logger.info("the site has no page at %s", url)
+      raise PageNotFound(f"The site has no page at {url}.")
+
+    try:
+      response.raise_for_status()
+    except requests.RequestException as error:
+      # Connection refused, timed out, TLS failure, or any other status the
+      # site chose. All of them are the site being unusable rather than the
+      # thing asked for being absent, so they share one answer and keep the
+      # reason.
+      raise LivewireError(
+        f"The site could not be read at {url}: {error}"
+      ) from error
 
     return response.text
 

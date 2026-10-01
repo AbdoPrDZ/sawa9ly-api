@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import type { NewUser, Role } from '../../api/types'
 import { Field } from '../../components/Field'
 import { Modal } from '../../components/Modal'
+import { useI18n } from '../../i18n/useI18n'
 
 /** Creates a user.
  *
@@ -18,6 +19,7 @@ export function CreateUserModal({
   onCancel(): void
   onSubmit(input: NewUser): Promise<void>
 }) {
+  const { t } = useI18n()
   const [username, setUsername] = useState('')
   const [role, setRole] = useState<Role>('user')
   const [password, setPassword] = useState('')
@@ -39,9 +41,9 @@ export function CreateUserModal({
   }
 
   return (
-    <Modal title="Add user" onClose={onCancel}>
+    <Modal title={t('user.modalTitle')} onClose={onCancel}>
       <form onSubmit={submit}>
-        <Field label="Username">
+        <Field label={t('user.fieldUsername')}>
           <input
             value={username}
             onChange={(event) => setUsername(event.target.value)}
@@ -50,14 +52,18 @@ export function CreateUserModal({
           />
         </Field>
 
-        <Field label="Role">
+        <Field label={t('user.fieldRole')}>
+          {/* The options are the two roles this form can assign, spelled in the
+              reader's language — a select has no way to say "same as the
+              account I just created". `super` is not offered: the API refuses it,
+              and a dropdown that 403s is worse than one that is not there. */}
           <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
-            <option value="user">user</option>
-            <option value="admin">admin</option>
+            <option value="user">{t('role.user')}</option>
+            <option value="admin">{t('role.admin')}</option>
           </select>
         </Field>
 
-        <Field label="Dashboard password" hint="Leave empty to create an API-only user.">
+        <Field label={t('user.fieldPassword')} hint={t('user.fieldPasswordHint')}>
           <input
             type="password"
             value={password}
@@ -66,17 +72,14 @@ export function CreateUserModal({
           />
         </Field>
 
-        <p className="muted">
-          The new user sets their own sawa9ly email, sawa9ly password and Telegram
-          chat from their profile.
-        </p>
+        <p className="text-sm text-muted">{t('user.newUserNote')}</p>
 
         <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onCancel}>
-            Cancel
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>
+            {t('generic.cancel')}
           </button>
-          <button type="submit" className="primary" disabled={busy}>
-            {busy ? 'Creating…' : 'Create user'}
+          <button type="submit" className="btn btn-primary" disabled={busy}>
+            {busy ? t('user.busy') : t('user.submit')}
           </button>
         </div>
       </form>

@@ -335,6 +335,8 @@ class TelegramService:
   @staticmethod
   def _redeem(db, bot, code, chat_id):
     """Bind the chat the code came from, then confirm it."""
+    from src.i18n import Messages
+
     row = TelegramBinding.verify(db, code)
     username = row.user.username
 
@@ -347,9 +349,14 @@ class TelegramService:
     logger.info("telegram: linked %s to chat %s (%s)", username, chat_id,
                 row.chat_type)
 
+    # In the language the person just proved they read by sending the code, not
+    # in whatever the operator happens to have: the binding row already knows
+    # which user this is.
     TelegramService._reply(
       bot, chat_id,
-      f"Linked to {username}. This chat will get your notifications.",
+      Messages.get(
+        "telegram.linked", row.user.locale(db), username=username
+      ),
     )
 
     return f'bound:{username}'

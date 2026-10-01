@@ -11,6 +11,7 @@ skip the rest.
 | `catalogue.md` | Saved product info and delivery clients | Touching products, scraped data, or checkout recipient fields |
 | `telegram.md` | Linking a user to a chat, and the bot that listens for it | Adding notifications, touching the bot token, or debugging an unlinked chat |
 | `notifications.md` | Recording an event and delivering it to the people who asked | Adding a notification event, or debugging a message that did not arrive |
+| `i18n.md` | The per-user language, the message catalogues, one row per language, RTL | Writing or changing any text a person reads, or adding a language |
 
 ## Boundaries
 
@@ -29,6 +30,10 @@ skip the rest.
 - **Notifications** is the join between something the queue noticed and the people
   who asked to hear about it. It reads trackers and products; it changes neither,
   and a failed send never fails a pass.
+- **i18n** is cross-cutting and owns no data of its own beyond the per-user
+  language. It decides *which words*, not what anything means; a notification's
+  judgement about what is worth saying stays in `notifications.md`, and a
+  controller's response shape stays in `schemas.py`.
 
 The dependency arrow points one way: catalogue → orders → checkout. Nothing in
 checkout imports an order, which is what keeps the site's quirks isolated to one

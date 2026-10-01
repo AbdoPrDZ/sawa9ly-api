@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import type { Page, PageEdits, PageState } from '../../api/types'
 import { Field } from '../../components/Field'
 import { Modal } from '../../components/Modal'
+import { useI18n } from '../../i18n/useI18n'
 import { publicUrl } from './publicUrl'
 
 /**
@@ -21,6 +22,7 @@ export function EditPageModal({
   onCancel(): void
   onSubmit(edits: PageEdits): Promise<void>
 }) {
+  const { t } = useI18n()
   const [title, setTitle] = useState(page.title)
   const [html, setHtml] = useState(page.html)
   const [state, setState] = useState<PageState>(page.state)
@@ -47,45 +49,38 @@ export function EditPageModal({
   }
 
   return (
-    <Modal title="Edit page" onClose={onCancel}>
+    <Modal title={t('page.editTitle')} onClose={onCancel}>
       <form onSubmit={submit}>
         {/* The product is fixed once a page exists, so it is stated rather than
             offered as a control: moving a page to another product means writing
             a new one. */}
-        <p className="muted">
+        <p className="mb-3.5 text-sm text-muted">
           {page.sawa9ly_product_id === null
-            ? 'This page’s product is no longer in the catalogue.'
-            : `For product ${page.sawa9ly_product_id}`}
+            ? t('page.editProductGone')
+            : t('page.editForProduct', { id: page.sawa9ly_product_id })}
           {page.product_title ? ` — ${page.product_title}` : ''}
         </p>
 
         <Field
-          label="Public link"
-          hint={
-            page.state === 'publish'
-              ? 'Live at /pages/. Open it in a new tab to see what a visitor sees.'
-              : 'Not served yet — only a page in the publish state answers this address.'
-          }
+          label={t('page.fieldLink')}
+          hint={page.state === 'publish' ? t('page.fieldLinkHintPublished') : t('page.fieldLinkHintDraft')}
         >
           <input readOnly value={publicUrl(page)} onFocus={(event) => event.target.select()} />
         </Field>
 
-        <Field label="Page title" hint="What this page is called in your list.">
+        <Field label={t('page.fieldEditTitle')} hint={t('page.fieldEditTitleHint')}>
           <input value={title} onChange={(event) => setTitle(event.target.value)} />
         </Field>
 
-        <Field label="State" hint="Only publish is live. Archive keeps the page without serving it.">
+        <Field label={t('page.fieldState')} hint={t('page.fieldStateHint')}>
           <select value={state} onChange={(event) => setState(event.target.value as PageState)}>
-            <option value="draft">draft</option>
-            <option value="publish">publish</option>
-            <option value="archive">archive</option>
+            <option value="draft">{t('pages.state.draft')}</option>
+            <option value="publish">{t('pages.state.publish')}</option>
+            <option value="archive">{t('pages.state.archive')}</option>
           </select>
         </Field>
 
-        <Field
-          label="HTML"
-          hint="The page markup. Clearing this box empties the page — that is a real change, not a skipped one."
-        >
+        <Field label={t('page.fieldEditHtml')} hint={t('page.fieldEditHtmlHint')}>
           <textarea
             rows={12}
             value={html}
@@ -95,15 +90,15 @@ export function EditPageModal({
         </Field>
 
         <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onCancel}>
-            Cancel
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>
+            {t('generic.cancel')}
           </button>
           <button
             type="submit"
-            className="primary"
+            className="btn btn-primary"
             disabled={busy || (!titleChanged && !htmlChanged && !stateChanged)}
           >
-            {busy ? 'Saving…' : 'Save changes'}
+            {busy ? t('generic.saving') : t('generic.save')}
           </button>
         </div>
       </form>

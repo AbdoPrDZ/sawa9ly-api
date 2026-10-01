@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, select
+from sqlalchemy import Boolean, DateTime, Integer, String, Text, or_, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db import Base, utcnow
@@ -87,11 +87,50 @@ class Product(Base):
     return product
 
   @classmethod
-  def all(cls, db, limit=None):
+  def all(cls, db, limit=None, offset=None, search=None):
+    """Every saved product, optionally narrowed and paged.
+
+    `search` matches the sawa9ly id exactly or the title loosely, so typing
+    either `5663` or a word of the title finds the row. See `Search` and
+    `Paging`, which own the escaping, the OR and the bounds.
+    """
+    from src.models.paging import Paging
+    from src.utils.search import Search
+
+    return list(db.execute(Paging.apply(cls._filtered(search), limit, offset)).scalars())
+
+  @classmethod
+  def page(cls, db, limit=None, offset=None, search=None):
+    """One page of saved products, and the total before paging.
+
+    Separate from `all` because `all` is what the CLI and the queue read, and it
+    has to keep returning a plain list. Only the HTTP list route needs the count.
+    """
+    from src.models.paging import Paging
+
+    return Paging.run(db, cls._filtered(search), limit, offset)
+
+  @classmethod
+  def _filtered(cls, search=None):
+    """The select every list of products shares.
+
+    One method because `all` and `page` must agree on what a search matches — two
+    copies of a filter is how a list route ends up searching on a column the CLI
+    does not, and the two quietly disagree.
+    """
+    from src.utils.search import Search
+
     query = select(cls).order_by(cls.product_id)
-    if limit:
-      query = query.limit(limit)
-    return list(db.execute(query).scalars())
+
+    match = Search.match(
+      Search.equals_int(cls.product_id, search),
+      Search.like(cls.title, search),
+    )
+
+    if match is not None:
+      query = query.where(match)
+
+    return query
 
   @staticmethod
   def parse_price(text):

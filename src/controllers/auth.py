@@ -44,17 +44,12 @@ class AuthController:
       "token": Token.issue(user, Token.signing_secret(db)),
       "token_type": "bearer",
       "expires_in": Token.TTL,
-      "user": {
-        "id": user.id,
-        "username": user.username,
-        "role": user.role,
-        "is_admin": user.is_admin(),
-      },
+      "user": AuthController._who(user, db),
     }
 
   @staticmethod
   @router.get("/me")
-  def me(user=Depends(Dependencies.get_token_user)):
+  def me(user=Depends(Dependencies.get_token_user), db: Session = Depends(Dependencies.get_db)):
     """The signed-in user, or 401 if the token is missing, stale or expired."""
     if user is None:
       raise HTTPException(
@@ -63,12 +58,7 @@ class AuthController:
         headers={"WWW-Authenticate": "Bearer"},
       )
 
-    return {
-      "id": user.id,
-      "username": user.username,
-      "role": user.role,
-      "is_admin": user.is_admin(),
-    }
+    return AuthController._who(user, db)
 
   @staticmethod
   @router.get("/me/profile", response_model=ProfileOut)
@@ -112,6 +102,17 @@ class AuthController:
 
     if body.password is not None:
       current.set_password(db, body.password)
+
+    if body.locale is not None:
+      # A 400 rather than a silent fallback: this is the API refusing a language
+      # it does not speak, and quietly keeping the old one would leave the user
+      # clicking a picker that did nothing.
+      try:
+        current.set_locale(db, body.locale)
+      except ValueError as error:
+        raise HTTPException(
+          status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)
+        ) from error
 
     db.commit()
 
@@ -163,6 +164,21 @@ class AuthController:
   # --- shaping --------------------------------------------------------
 
   @staticmethod
+  def _who(user, db):
+    """The signed-in user, as the shell needs them.
+
+    Read from the row rather than the token, so a demotion or a deleted account
+    takes effect at once — and the language with it, since it lives on the user.
+    """
+    return {
+      "id": user.id,
+      "username": user.username,
+      "role": user.role,
+      "is_admin": user.is_admin(),
+      "locale": user.locale(db),
+    }
+
+  @staticmethod
   def _profile(user, db):
     """The profile body, with the session status read from the stored settings."""
     from src.models import SESSION_KEY
@@ -178,4 +194,5 @@ class AuthController:
       "has_sawa9ly_credentials": bool(user.sawa9ly_email and user.sawa9ly_password),
       "sawa9ly_email": user.sawa9ly_email,
       "has_sawa9ly_session": bool(stored),
+      "locale": user.locale(db),
     }

@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import type { CatalogueProduct, NewPage } from '../../api/types'
 import { Field } from '../../components/Field'
 import { Modal } from '../../components/Modal'
+import { useI18n } from '../../i18n/useI18n'
 
 /**
  * Starts a draft landing page for one product.
@@ -20,6 +21,7 @@ export function CreatePageModal({
   onCancel(): void
   onSubmit(input: NewPage): Promise<void>
 }) {
+  const { t } = useI18n()
   const [productId, setProductId] = useState('')
   const [title, setTitle] = useState('')
   const [html, setHtml] = useState('')
@@ -37,15 +39,11 @@ export function CreatePageModal({
   }
 
   return (
-    <Modal title="New landing page" onClose={onCancel}>
+    <Modal title={t('page.modalTitle')} onClose={onCancel}>
       <form onSubmit={submit}>
         <Field
-          label="Product"
-          hint={
-            products.length
-              ? 'The sawa9ly id is what gets stored. A product not in the list can still be added by typing its id.'
-              : 'Nothing saved in the catalogue yet. Type the sawa9ly product id.'
-          }
+          label={t('page.fieldProduct')}
+          hint={products.length ? t('page.fieldProductHint') : t('page.fieldProductHintEmpty')}
         >
           <input
             list="page-product-ids"
@@ -55,6 +53,9 @@ export function CreatePageModal({
             autoFocus
             required
           />
+          {/* The datalist options are the product's own title, which is the
+              site's wording and is not translated. A datalist has no label of
+              its own to set, so the association is the `list` attribute above. */}
           <datalist id="page-product-ids">
             {products.map((product) => (
               <option key={product.product_id} value={product.product_id}>
@@ -64,14 +65,11 @@ export function CreatePageModal({
           </datalist>
         </Field>
 
-        <Field label="Title" hint="What the page is called in this list.">
+        <Field label={t('page.fieldTitle')} hint={t('page.fieldTitleHint')}>
           <input value={title} onChange={(event) => setTitle(event.target.value)} required />
         </Field>
 
-        <Field
-          label="HTML"
-          hint="The page markup, stored as written. Nothing renders it yet, so it cannot break this dashboard."
-        >
+        <Field label={t('page.fieldHtml')} hint={t('page.fieldHtmlHint')}>
           <textarea
             rows={10}
             value={html}
@@ -81,15 +79,15 @@ export function CreatePageModal({
         </Field>
 
         <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onCancel}>
-            Cancel
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>
+            {t('generic.cancel')}
           </button>
           <button
             type="submit"
-            className="primary"
+            className="btn btn-primary"
             disabled={busy || !productId.trim() || !title.trim()}
           >
-            {busy ? 'Creating…' : 'Create page'}
+            {busy ? t('page.busy') : t('page.submit')}
           </button>
         </div>
       </form>

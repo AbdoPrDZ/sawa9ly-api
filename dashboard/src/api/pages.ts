@@ -1,5 +1,5 @@
-import { request } from './client'
-import type { NewPage, Page, PageEdits } from './types'
+import { listQuery, request } from './client'
+import type { ListQuery, NewPage, Page, PageEdits, PageResult } from './types'
 
 /** The signed-in user's own landing pages, for the catalogue's products.
  *
@@ -8,8 +8,9 @@ import type { NewPage, Page, PageEdits } from './types'
  * id; on the way out it is ours, with the sawa9ly one alongside it.
  */
 
-export function listPages() {
-  return request<Page[]>('/pages')
+/** One page of your pages. `query.q` searches the title and the product id. */
+export function listPages(query: ListQuery = {}) {
+  return request<PageResult<Page>>(`/pages${listQuery(query)}`)
 }
 
 export function getPage(pageId: number) {

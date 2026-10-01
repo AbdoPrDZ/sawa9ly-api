@@ -1,16 +1,23 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listProducts } from '../api/catalogue'
-import { isUnauthorized } from '../api/client'
 import { createPage, listPages, updatePage } from '../api/pages'
 import type { CatalogueProduct, NewPage, Page, PageEdits } from '../api/types'
 import { AdminOnly } from '../components/AdminOnly'
 import { Banner } from '../components/Banner'
+import { EmptyState } from '../components/EmptyState'
+import { PageHeader } from '../components/PageHeader'
 import { PageStateBadge } from '../components/PageStateBadge'
-import { Spinner } from '../components/Spinner'
+import { Pager } from '../components/Pager'
+import { SearchInput } from '../components/SearchInput'
+import { MessageSpinner } from '../components/Spinner'
+import { TablePanel } from '../components/TablePanel'
 import { CreatePageModal } from '../features/pages/CreatePageModal'
 import { EditPageModal } from '../features/pages/EditPageModal'
 import { publicUrl } from '../features/pages/publicUrl'
+import { PAGE_SIZE, usePagedList } from '../hooks/usePagedList'
+import { apiErrorMessage } from '../i18n/apiError'
+import { useI18n } from '../i18n/useI18n'
 import { useSession } from '../session/useSession'
 
 /** The signed-in user's landing pages.
@@ -25,41 +32,37 @@ import { useSession } from '../session/useSession'
  */
 export function Pages() {
   const { invalidate } = useSession()
-  const [pages, setPages] = useState<Page[] | null>(null)
-  const [products, setProducts] = useState<CatalogueProduct[]>([])
-  const [error, setError] = useState('')
+  const { t } = useI18n()
+const [products, setProducts] = useState<CatalogueProduct[]>([])
   const [notice, setNotice] = useState('')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Page | null>(null)
 
-  const load = useCallback(async () => {
-    try {
-      setPages(await listPages())
-    } catch (caught) {
-      if (isUnauthorized(caught)) return invalidate()
-      setError(message(caught, 'Could not load your pages.'))
-    }
-  }, [invalidate])
+  const list = usePagedList<Page>(listPages, {
+    errorKey: 'error.pages',
+    onUnauthorized: invalidate,
+  })
+  const pages = list.items
 
   useEffect(() => {
-    void load()
-
-    // The catalogue only populates the product picker. A failure there is not
-    // worth a message of its own: the id can still be typed by hand.
-    listProducts()
-      .then(setProducts)
+    // The catalogue only populates the product picker, so it is asked for the
+    // largest page the server will serve rather than a page of the list the
+    // picker can scroll through. A failure here is not worth a message of its
+    // own: the id can still be typed by hand.
+    listProducts({ limit: 200 })
+      .then((result) => setProducts(result.items))
       .catch(() => setProducts([]))
-  }, [load])
+  }, [])
 
   async function onCreate(input: NewPage) {
     try {
-      const created = await createPage(input)
+const created = await createPage(input)
       setCreating(false)
-      setError('')
-      setNotice(`Created "${created.title}".`)
-      await load()
+      list.setError('')
+      setNotice(t('pages.created', { title: created.title }))
+      list.reload()
     } catch (caught) {
-      setError(message(caught, 'Could not create the page.'))
+      list.setError(apiErrorMessage(caught, t, 'error.pages'))
     }
   }
 
@@ -69,67 +72,71 @@ export function Pages() {
     try {
       await updatePage(editing.id, edits)
       setEditing(null)
-      setError('')
-      setNotice('Saved.')
-      await load()
+      list.setError('')
+      setNotice(t('pages.saved'))
+      list.reload()
     } catch (caught) {
-      setError(message(caught, 'Could not save the page.'))
+      list.setError(apiErrorMessage(caught, t, 'error.pages'))
     }
   }
 
   return (
     <section>
-      <div className="section-head">
-        <h2>Landing pages</h2>
-        <div className="section-actions">
-          <button type="button" className="primary" onClick={() => setCreating(true)}>
-            New page
-          </button>
-        </div>
-      </div>
+      <PageHeader title={t('pages.title')}>
+        <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+          {t('pages.new')}
+        </button>
+      </PageHeader>
 
-      <p className="muted">
-        Your own pages, one per product or as many as you like for the same one.
-        Nothing serves a page yet — this is where the writing is kept until it is.
-      </p>
+      <p className="mb-5 max-w-prose text-sm text-muted">{t('pages.intro')}</p>
 
-      {error ? <Banner kind="error">{error}</Banner> : null}
+{list.error ? <Banner kind="error">{list.error}</Banner> : null}
       {notice ? <Banner kind="success">{notice}</Banner> : null}
 
+      <div className="mb-4 max-w-sm">
+        <SearchInput
+          value={list.query.term}
+          onChange={list.query.setTerm}
+          placeholder={t('list.searchBy', { resource: t('resource.pages') })}
+          label={t('list.search')}
+          busy={list.busy}
+        />
+      </div>
+
       {!pages ? (
-        <Spinner label="Loading pages" />
+        <MessageSpinner messageKey="loading.pages" />
       ) : pages.length === 0 ? (
-        <>
-          <p className="muted">None yet. Create one above.</p>
+        <EmptyState>
+          <p>{list.query.q ? t('pages.emptySearch') : t('pages.empty')}</p>
           <AdminOnly>
-            <p className="muted">
-              Or from the command line:{' '}
-              <code>python main.py page create 5663 &quot;Summer offer&quot; --user &lt;name&gt;</code>.
+            <p className="mt-2">
+              {t('pages.emptyCli')}{' '}
+              <code>python main.py page create 5663 &quot;Summer offer&quot; --user &lt;name&gt;</code>
             </p>
           </AdminOnly>
-        </>
+        </EmptyState>
       ) : (
-        <table>
+        <TablePanel>
           <thead>
             <tr>
-              <th>Title</th>
-              <th>Product</th>
-              <th>State</th>
-              <th>Public link</th>
-              <th>HTML</th>
-              <th>Updated</th>
+              <th>{t('pages.col.title')}</th>
+              <th>{t('pages.col.product')}</th>
+              <th>{t('pages.col.state')}</th>
+              <th>{t('pages.col.link')}</th>
+              <th>{t('pages.col.html')}</th>
+              <th>{t('pages.col.updated')}</th>
               <th />
             </tr>
           </thead>
           <tbody>
             {pages.map((page) => (
               <tr key={page.id}>
-                <td>{page.title}</td>
+                <td className="max-w-xs truncate font-medium">{page.title}</td>
                 <td>
                   {page.sawa9ly_product_id === null ? (
-                    <span className="muted">removed from catalogue</span>
+                    <span className="text-muted">{t('pages.removedFromCatalogue')}</span>
                   ) : (
-                    <Link className="link" to={`/products/${page.sawa9ly_product_id}`}>
+                    <Link className="btn-link" to={`/products/${page.sawa9ly_product_id}`}>
                       {page.sawa9ly_product_id}
                     </Link>
                   )}
@@ -145,31 +152,40 @@ export function Pages() {
                     found, and it does not change with the state.
                   */}
                   {page.state === 'publish' ? (
-                    <a
-                      className="link"
-                      href={publicUrl(page)}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
+                    <a className="btn-link" href={publicUrl(page)} target="_blank" rel="noreferrer">
                       /pages/{page.public_id.slice(0, 8)}…
                     </a>
                   ) : (
-                    <span className="muted" title="Only a published page is served">
+                    <span className="text-muted" title={t('pages.notServed')}>
                       /pages/{page.public_id.slice(0, 8)}…
                     </span>
                   )}
                 </td>
-                <td className="muted">{page.html.length} chars</td>
-                <td className="muted">{page.updated_at ?? '—'}</td>
-                <td className="row-actions">
-                  <button type="button" onClick={() => setEditing(page)}>
-                    Edit
+                <td className="text-muted">{page.html.length}</td>
+                <td className="text-muted">{page.updated_at ?? t('generic.unknown')}</td>
+                <td className="text-end">
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setEditing(page)}
+                  >
+                    {t('generic.edit')}
                   </button>
                 </td>
               </tr>
             ))}
-          </tbody>
-        </table>
+</tbody>
+        </TablePanel>
+      )}
+
+      {pages && pages.length > 0 && (
+        <Pager
+          total={list.total}
+          page={list.query.page}
+          pageSize={PAGE_SIZE}
+          hasMore={list.hasMore}
+          onPage={list.query.setPage}
+        />
       )}
 
       {creating ? (
@@ -187,6 +203,3 @@ export function Pages() {
   )
 }
 
-function message(caught: unknown, fallback: string): string {
-  return caught instanceof Error ? caught.message : fallback
-}

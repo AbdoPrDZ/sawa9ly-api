@@ -1,12 +1,56 @@
 """Request and response bodies for the API."""
 
+from typing import Generic, TypeVar
+
 from pydantic import BaseModel, Field
+
+#: What a `Page` carries. Bound to the concrete `Out` schema by each route, so
+#: `/api/v1/catalogue` is documented as a page of products rather than of
+#: something untyped.
+T = TypeVar("T")
+
+
+class PageMeta(BaseModel):
+  """How a page of results was drawn, for a list route that was asked for one.
+
+  `limit` is null when the request asked for no limit, which is the default and
+  the case the CLI and the machine contract use. `has_more` is here so a client
+  does not have to work out `offset + len(items) < total` itself, which is the
+  one piece of arithmetic every list screen would otherwise repeat.
+  """
+
+  total: int
+  limit: int | None = None
+  offset: int = 0
+  has_more: bool = False
+
+
+class Page(PageMeta, Generic[T]):
+  """One page of a list.
+
+  **A change to the list contract.** These routes used to answer with a bare JSON
+  array; they now answer with an object whose rows are under `items`. There is no
+  way to carry a total count inside an array, so this could not be done without
+  changing the shape — the alternative was a header nobody would read.
+
+  What did not change: `q`, `limit` and `offset` are all optional, and a request
+  that passes none of them still gets every row. A caller that wants everything
+  only has to read one more key.
+  """
+
+  items: list[T]
 
 
 class ProductOut(BaseModel):
   product_id: int
   title: str
-  availability: bool
+  # Named `available`, not `availability`. `availability` is what the site calls
+  # it and what the scraper reads, but the column, the model and every consumer
+  # — the CLI, the dashboard — use `available`. This field was declared as
+  # `availability` and never matched, which went unnoticed because the list
+  # routes returned a bare `list`, so FastAPI validated nothing. Typing the route
+  # as `Page[ProductOut]` made the mismatch surface as a 500.
+  available: bool
   images: list[str]
   description: str
   figures: list[str]
@@ -199,10 +243,20 @@ class LoginIn(BaseModel):
 
 
 class SessionUserOut(BaseModel):
+  """Who is signed in, as the shell needs to know it.
+
+  `locale` is here rather than only on the profile because the whole interface is
+  written in it: the shell has to set the document language and direction before
+  it renders anything, and it cannot wait for the profile page to load. The
+  server is the authority — the same value decides the language of this user's
+  Telegram notifications.
+  """
+
   id: int
   username: str
   role: str
   is_admin: bool
+  locale: str = "en"
 
 
 class SessionOut(BaseModel):
@@ -229,6 +283,8 @@ class ProfileOut(BaseModel):
   has_sawa9ly_credentials: bool
   sawa9ly_email: str | None = None
   has_sawa9ly_session: bool = False
+  locale: str = "en"
+  """Which language this user reads, and gets their notifications in."""
 
 
 class ProfileIn(BaseModel):
@@ -241,6 +297,7 @@ class ProfileIn(BaseModel):
   sawa9ly_email: str | None = None
   sawa9ly_password: str | None = None
   password: str | None = Field(default=None, min_length=1)
+  locale: str | None = Field(default=None, description="'en', 'fr' or 'ar'")
 
 
 class Sawa9lyLoginOut(BaseModel):

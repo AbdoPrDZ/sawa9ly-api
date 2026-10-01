@@ -1,12 +1,17 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { isUnauthorized } from '../api/client'
+import { useNavigate } from 'react-router-dom'
 import { listAllOrders, listOrders } from '../api/orders'
 import type { Order } from '../api/types'
 import { AdminOnly } from '../components/AdminOnly'
 import { Banner } from '../components/Banner'
+import { EmptyState } from '../components/EmptyState'
 import { OrderStateBadge } from '../components/OrderStateBadge'
-import { Spinner } from '../components/Spinner'
+import { PageHeader } from '../components/PageHeader'
+import { Pager } from '../components/Pager'
+import { SearchInput } from '../components/SearchInput'
+import { MessageSpinner } from '../components/Spinner'
+import { TablePanel } from '../components/TablePanel'
+import { PAGE_SIZE, usePagedList } from '../hooks/usePagedList'
+import { useI18n } from '../i18n/useI18n'
 import { useSession } from '../session/useSession'
 
 /** Orders, newest first.
@@ -22,96 +27,105 @@ import { useSession } from '../session/useSession'
  */
 export function Orders() {
   const { user, invalidate } = useSession()
-  const [orders, setOrders] = useState<Order[] | null>(null)
-  const [error, setError] = useState('')
+  const { t } = useI18n()
+  const navigate = useNavigate()
 
   const isSuper = user?.role === 'super'
 
-  const load = useCallback(async () => {
-    try {
-      setOrders(isSuper ? await listAllOrders() : await listOrders())
-    } catch (caught) {
-      if (isUnauthorized(caught)) return invalidate()
-      setError(message(caught, 'Could not load the orders.'))
-    }
-  }, [isSuper, invalidate])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+  const list = usePagedList<Order>(isSuper ? listAllOrders : listOrders, {
+    errorKey: 'error.orders',
+    onUnauthorized: invalidate,
+    fetcherKey: isSuper ? 'all' : 'own',
+  })
+  const orders = list.items
 
   return (
     <section>
-      <div className="section-head">
-        <h2>Orders</h2>
+      <PageHeader title={t('orders.title')}>
+        {isSuper ? <span className="text-xs text-muted">{t('orders.everyone')}</span> : null}
+      </PageHeader>
+
+      {isSuper ? <Banner kind="info">{t('orders.superBanner')}</Banner> : null}
+
+{list.error ? <Banner kind="error">{list.error}</Banner> : null}
+
+      <div className="mb-4 max-w-sm">
+        <SearchInput
+          value={list.query.term}
+          onChange={list.query.setTerm}
+          placeholder={t('list.searchBy', { resource: t('resource.orders') })}
+          label={t('list.search')}
+          busy={list.busy}
+        />
       </div>
 
-      {isSuper ? (
-        <Banner kind="info">
-          Showing every user's orders, because you are a super. Editing or checking
-          out somebody else's order stays a CLI operation on their own account.
-        </Banner>
-      ) : null}
-
-      {error ? <Banner kind="error">{error}</Banner> : null}
-
       {!orders ? (
-        <Spinner label="Loading orders" />
+        <MessageSpinner messageKey="loading.orders" />
       ) : orders.length === 0 ? (
-        isSuper ? (
-          <p className="muted">No orders from anybody yet.</p>
-        ) : (
-          <>
-            <p className="muted">No orders yet.</p>
-            <AdminOnly>
-              <p className="muted">
-                Start one with <code>python main.py order create --user &lt;name&gt;</code>.
-              </p>
-            </AdminOnly>
-          </>
-        )
+        <EmptyState>
+          {list.query.q ? (
+            <p>{t('orders.emptySearch')}</p>
+          ) : isSuper ? (
+            <p>{t('orders.emptyAll')}</p>
+          ) : (
+            <>
+              <p>{t('orders.empty')}</p>
+              <AdminOnly>
+                <p className="mt-2">
+                  {t('orders.emptyCli')}{' '}
+                  <code>python main.py order create --user &lt;name&gt;</code>
+                </p>
+              </AdminOnly>
+            </>
+          )}
+        </EmptyState>
       ) : (
-        <table>
+        <TablePanel>
           <thead>
             <tr>
-              <th>Id</th>
-              {isSuper ? <th>User</th> : null}
-              <th>Created</th>
-              <th>State</th>
-              <th>Client</th>
-              <th>Reference</th>
-              <th>Lines</th>
-              <th>Total</th>
-              <th />
+              <th>{t('orders.col.id')}</th>
+              {isSuper ? <th>{t('orders.col.user')}</th> : null}
+              <th>{t('orders.col.created')}</th>
+              <th>{t('orders.col.state')}</th>
+              <th>{t('orders.col.client')}</th>
+              <th>{t('orders.col.reference')}</th>
+              <th>{t('orders.col.lines')}</th>
+<th>{t('orders.col.total')}</th>
             </tr>
           </thead>
           <tbody>
-            {orders.map((order) => (
-              <tr key={order.id}>
-                <td>{order.id}</td>
-                {isSuper ? <td>{order.username ?? '—'}</td> : null}
-                <td className="muted">{order.created_at ?? '—'}</td>
+{orders.map((order) => (
+              <tr
+                key={order.id}
+                className="cursor-pointer"
+                onClick={() => navigate(`/orders/${order.id}`)}
+              >
+                <td className="font-mono text-xs text-muted">{order.id}</td>
+                {isSuper ? <td className="font-medium">{order.username ?? t('generic.unknown')}</td> : null}
+                <td className="text-muted">{order.created_at ?? t('generic.unknown')}</td>
                 <td>
                   <OrderStateBadge state={order.state} />
                 </td>
-                <td>{order.client_id ?? '—'}</td>
-                <td>{order.reference ?? '—'}</td>
-                <td className="muted">{order.lines.length}</td>
-                <td>{order.total}</td>
-                <td className="row-actions">
-                  <Link className="ghost link" to={`/orders/${order.id}`}>
-                    Open
-                  </Link>
-                </td>
+                <td>{order.client_id ?? t('generic.unknown')}</td>
+                <td className="font-mono text-xs">{order.reference ?? t('generic.unknown')}</td>
+                <td className="text-muted">{order.lines.length}</td>
+<td className="font-medium">{order.total}</td>
               </tr>
             ))}
-          </tbody>
-        </table>
+</tbody>
+        </TablePanel>
+      )}
+
+      {orders && orders.length > 0 && (
+        <Pager
+          total={list.total}
+          page={list.query.page}
+          pageSize={PAGE_SIZE}
+          hasMore={list.hasMore}
+          onPage={list.query.setPage}
+        />
       )}
     </section>
   )
 }
 
-function message(caught: unknown, fallback: string): string {
-  return caught instanceof Error ? caught.message : fallback
-}

@@ -1,11 +1,18 @@
-import { useCallback, useEffect, useState } from 'react'
-import { isUnauthorized } from '../api/client'
+import { useState } from 'react'
 import { createClient, listClients } from '../api/clients'
 import type { Client, NewClient } from '../api/types'
 import { AdminOnly } from '../components/AdminOnly'
 import { Banner } from '../components/Banner'
-import { Spinner } from '../components/Spinner'
+import { EmptyState } from '../components/EmptyState'
+import { PageHeader } from '../components/PageHeader'
+import { Pager } from '../components/Pager'
+import { SearchInput } from '../components/SearchInput'
+import { MessageSpinner } from '../components/Spinner'
+import { TablePanel } from '../components/TablePanel'
 import { CreateClientModal } from '../features/clients/CreateClientModal'
+import { PAGE_SIZE, usePagedList } from '../hooks/usePagedList'
+import { apiErrorMessage } from '../i18n/apiError'
+import { useI18n } from '../i18n/useI18n'
 import { useSession } from '../session/useSession'
 
 /** The signed-in user's delivery recipients, the people their orders ship to.
@@ -18,94 +25,99 @@ import { useSession } from '../session/useSession'
  * second one, so this is also how a recipient is corrected.
  */
 export function Clients() {
-  const { invalidate } = useSession()
-  const [clients, setClients] = useState<Client[] | null>(null)
-  const [error, setError] = useState('')
+const { invalidate } = useSession()
+  const { t } = useI18n()
   const [notice, setNotice] = useState('')
   const [adding, setAdding] = useState(false)
 
-  const load = useCallback(async () => {
-    try {
-      setClients(await listClients())
-    } catch (caught) {
-      if (isUnauthorized(caught)) return invalidate()
-      setError(message(caught, 'Could not load your recipients.'))
-    }
-  }, [invalidate])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+  const list = usePagedList<Client>(listClients, {
+    errorKey: 'error.recipients',
+    onUnauthorized: invalidate,
+  })
+  const clients = list.items
 
   async function onCreate(input: NewClient) {
     try {
       const saved = await createClient(input)
       setAdding(false)
-      setError('')
-      setNotice(`Saved ${saved.full_name}.`)
-      await load()
+      list.setError('')
+      setNotice(t('clients.saved', { name: saved.full_name }))
+      list.reload()
     } catch (caught) {
-      setError(message(caught, 'Could not save the recipient.'))
+      list.setError(apiErrorMessage(caught, t, 'error.recipients'))
     }
   }
 
   return (
     <section>
-      <div className="section-head">
-        <h2>Delivery recipients</h2>
-        <div className="section-actions">
-          <button type="button" className="primary" onClick={() => setAdding(true)}>
-            Add recipient
-          </button>
-        </div>
-      </div>
+      <PageHeader title={t('clients.title')}>
+        <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+          {t('clients.add')}
+        </button>
+      </PageHeader>
 
-      <p className="muted">
-        These are the details an order is shipped to. They are stored against your
-        account, so a checkout does not have to ask for them again. Saving a name
-        that is already here updates that recipient instead of adding a second one.
-      </p>
+      <p className="mb-5 max-w-prose text-sm text-muted">{t('clients.intro')}</p>
 
-      {error ? <Banner kind="error">{error}</Banner> : null}
+{list.error ? <Banner kind="error">{list.error}</Banner> : null}
       {notice ? <Banner kind="success">{notice}</Banner> : null}
 
+      <div className="mb-4 max-w-sm">
+        <SearchInput
+          value={list.query.term}
+          onChange={list.query.setTerm}
+          placeholder={t('list.searchBy', { resource: t('resource.clients') })}
+          label={t('list.search')}
+          busy={list.busy}
+        />
+      </div>
+
       {!clients ? (
-        <Spinner label="Loading recipients" />
+        <MessageSpinner messageKey="loading.recipients" />
       ) : clients.length === 0 ? (
-        <>
-          <p className="muted">None yet. Add one above.</p>
+        <EmptyState>
+          <p>{list.query.q ? t('clients.emptySearch') : t('clients.empty')}</p>
           <AdminOnly>
-            <p className="muted">
-              Or from the command line:{' '}
-              <code>python main.py client add &quot;Full name&quot; --user &lt;name&gt;</code>.
+            <p className="mt-2">
+              {t('clients.emptyCli')}{' '}
+              <code>python main.py client add &quot;Full name&quot; --user &lt;name&gt;</code>
             </p>
           </AdminOnly>
-        </>
+        </EmptyState>
       ) : (
-        <table>
+        <TablePanel>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Phone</th>
-              <th>Adresse</th>
-              <th>Wilaya</th>
-              <th>Commune</th>
-              <th>Note</th>
+              <th>{t('clients.col.name')}</th>
+              <th>{t('clients.col.phone')}</th>
+              <th>{t('clients.col.adresse')}</th>
+              <th>{t('clients.col.wilaya')}</th>
+              <th>{t('clients.col.commune')}</th>
+              <th>{t('clients.col.note')}</th>
             </tr>
           </thead>
           <tbody>
             {clients.map((client) => (
               <tr key={client.id}>
-                <td>{client.full_name}</td>
-                <td>{client.phone ?? '—'}</td>
-                <td>{client.adresse ?? '—'}</td>
-                <td>{client.wilaya_id ?? '—'}</td>
-                <td>{client.commune_id ?? '—'}</td>
-                <td className="muted">{client.note ?? '—'}</td>
+                <td className="font-medium">{client.full_name}</td>
+                <td className="font-mono text-xs">{client.phone ?? t('generic.unknown')}</td>
+                <td>{client.adresse ?? t('generic.unknown')}</td>
+                <td className="text-muted">{client.wilaya_id ?? t('generic.unknown')}</td>
+                <td className="text-muted">{client.commune_id ?? t('generic.unknown')}</td>
+                <td className="max-w-xs truncate text-muted">{client.note ?? t('generic.unknown')}</td>
               </tr>
             ))}
-          </tbody>
-        </table>
+</tbody>
+        </TablePanel>
+      )}
+
+      {clients && clients.length > 0 && (
+        <Pager
+          total={list.total}
+          page={list.query.page}
+          pageSize={PAGE_SIZE}
+          hasMore={list.hasMore}
+          onPage={list.query.setPage}
+        />
       )}
 
       {adding ? (
@@ -115,6 +127,3 @@ export function Clients() {
   )
 }
 
-function message(caught: unknown, fallback: string): string {
-  return caught instanceof Error ? caught.message : fallback
-}

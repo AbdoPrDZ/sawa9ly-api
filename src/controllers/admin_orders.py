@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.controllers.dependencies import Dependencies
-from src.schemas import OrderOut
+from src.schemas import OrderOut, Page
 from src.services import OrderError, OrderService
 
 
@@ -24,11 +24,20 @@ class AdminOrdersController:
 
   router = APIRouter(prefix="/admin", tags=["admin"])
 
-  @router.get("/orders", response_model=list[OrderOut])
-  def list_orders(_super=Depends(Dependencies.require_super),
+  @router.get("/orders", response_model=Page[OrderOut])
+  def list_orders(q: str | None = None, limit: int | None = None,
+                  offset: int | None = None,
+                  _super=Depends(Dependencies.require_super),
                   db: Session = Depends(Dependencies.get_db)):
-    """Every user's orders, newest first."""
-    return [AdminOrdersController._out(order) for order in OrderService.list(db)]
+    """Every user's orders, newest first.
+
+    `q` searches the order id and the reference; `limit` and `offset` page the
+    result. All three are optional, and passing none of them returns every row.
+    """
+    from src.models import Order as OrderRow
+
+    return OrderRow.page(db, limit=limit, offset=offset,
+                         search=q).as_dict(AdminOrdersController._out)
 
   @router.get("/orders/{order_id}", response_model=OrderOut)
   def read_order(order_id: int, _super=Depends(Dependencies.require_super),

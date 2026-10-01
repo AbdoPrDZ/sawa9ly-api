@@ -1,5 +1,6 @@
 import type { AdminApiKey } from '../../api/types'
 import { Modal } from '../../components/Modal'
+import { useI18n } from '../../i18n/useI18n'
 
 /** Confirms a revoke, which takes effect on the key's next use. */
 export function RevokeKeyModal({
@@ -11,18 +12,17 @@ export function RevokeKeyModal({
   onCancel(): void
   onConfirm(): void
 }) {
+  const { t } = useI18n()
+
   return (
-    <Modal title={`Revoke ${apiKey.prefix}…?`} onClose={onCancel}>
-      <p>
-        Any client using this key stops working immediately. The record stays so you can see the
-        key existed.
-      </p>
+    <Modal title={t('key.revokeTitle', { prefix: apiKey.prefix })} onClose={onCancel}>
+      <p className="text-sm">{t('key.revokeBody')}</p>
       <div className="modal-actions">
-        <button type="button" className="ghost" onClick={onCancel}>
-          Cancel
+        <button type="button" className="btn btn-ghost" onClick={onCancel}>
+          {t('generic.cancel')}
         </button>
-        <button type="button" className="danger" onClick={onConfirm}>
-          Revoke key
+        <button type="button" className="btn btn-danger" onClick={onConfirm}>
+          {t('key.revokeConfirm')}
         </button>
       </div>
     </Modal>

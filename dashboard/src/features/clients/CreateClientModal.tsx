@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import type { NewClient } from '../../api/types'
 import { Field } from '../../components/Field'
 import { Modal } from '../../components/Modal'
+import { useI18n } from '../../i18n/useI18n'
 
 /**
  * Adds a delivery recipient, or edits one already stored under the same name.
@@ -10,6 +11,10 @@ import { Modal } from '../../components/Modal'
  * The fields are the site's own checkout form, so the labels match what sawa9ly
  * asks for. Only the name is required; the site validates the rest at checkout
  * time, which is why nothing here is marked required.
+ *
+ * The field names are translated but not the column headers the site uses, and
+ * `adresse` is left as the site's own French spelling rather than corrected —
+ * it is the word on their form, and matching it is the point.
  */
 export function CreateClientModal({
   onCancel,
@@ -18,6 +23,7 @@ export function CreateClientModal({
   onCancel(): void
   onSubmit(input: NewClient): Promise<void>
 }) {
+  const { t } = useI18n()
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [adresse, setAdresse] = useState('')
@@ -52,12 +58,9 @@ export function CreateClientModal({
   }
 
   return (
-    <Modal title="Add a delivery recipient" onClose={onCancel}>
+    <Modal title={t('client.modalTitle')} onClose={onCancel}>
       <form onSubmit={submit}>
-        <Field
-          label="Full name"
-          hint="The key. Saving this name again updates that recipient instead of adding a second one."
-        >
+        <Field label={t('client.fieldName')} hint={t('client.fieldNameHint')}>
           <input
             value={fullName}
             onChange={(event) => setFullName(event.target.value)}
@@ -67,22 +70,15 @@ export function CreateClientModal({
           />
         </Field>
 
-        <Field label="Phone" hint="The number the site calls to confirm the delivery.">
-          <input
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            autoComplete="tel"
-          />
+        <Field label={t('client.fieldPhone')} hint={t('client.fieldPhoneHint')}>
+          <input value={phone} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" />
         </Field>
 
-        <Field label="Adresse" hint="Street address, as the site wants it written.">
+        <Field label={t('client.fieldAdresse')} hint={t('client.fieldAdresseHint')}>
           <input value={adresse} onChange={(event) => setAdresse(event.target.value)} />
         </Field>
 
-        <Field
-          label="Wilaya id"
-          hint="The site's numeric id for the province, not its name. Needed to reach dispatch."
-        >
+        <Field label={t('client.fieldWilaya')} hint={t('client.fieldWilayaHint')}>
           <input
             type="number"
             value={wilayaId}
@@ -90,7 +86,7 @@ export function CreateClientModal({
           />
         </Field>
 
-        <Field label="Commune id" hint="The site's numeric id for the commune.">
+        <Field label={t('client.fieldCommune')} hint={t('client.fieldCommuneHint')}>
           <input
             type="number"
             value={communeId}
@@ -98,16 +94,16 @@ export function CreateClientModal({
           />
         </Field>
 
-        <Field label="Note" hint="Optional. Anything worth remembering about them.">
+        <Field label={t('client.fieldNote')} hint={t('client.fieldNoteHint')}>
           <input value={note} onChange={(event) => setNote(event.target.value)} />
         </Field>
 
         <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onCancel}>
-            Cancel
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>
+            {t('generic.cancel')}
           </button>
-          <button type="submit" className="primary" disabled={busy || !fullName.trim()}>
-            {busy ? 'Saving…' : 'Save recipient'}
+          <button type="submit" className="btn btn-primary" disabled={busy || !fullName.trim()}>
+            {busy ? t('client.busy') : t('client.submit')}
           </button>
         </div>
       </form>

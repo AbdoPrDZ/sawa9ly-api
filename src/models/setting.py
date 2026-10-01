@@ -8,6 +8,11 @@ from src.db import Base
 # The login session cookie lives here rather than in a file on disk.
 SESSION_KEY = "sawa9ly_session"
 
+# Which language this user reads and is written to in. A setting rather than a
+# column on `users`, so that adding a language is not a schema change — the same
+# reason the session cookie is here. See `src/i18n.py`.
+LOCALE_KEY = "sawa9ly_locale"
+
 
 class Setting(Base):
   """A single named value belonging to a user.

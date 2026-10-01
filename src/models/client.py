@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, select
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, or_, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db import Base, utcnow
@@ -35,10 +35,45 @@ class Client(Base):
     return db.get(cls, int(client_id))
 
   @classmethod
-  def all(cls, db, user_id):
+  def all(cls, db, user_id, limit=None, offset=None, search=None):
+    """Every delivery recipient of one user, optionally narrowed and paged.
+
+    `search` matches the name or the phone number: those are the two things
+    somebody looking for a recipient knows.
+    """
+    from src.models.paging import Paging
+
     return list(db.execute(
-      select(cls).where(cls.user_id == user_id).order_by(cls.full_name)
+      Paging.apply(cls._filtered(user_id, search), limit, offset)
     ).scalars())
+
+  @classmethod
+  def page(cls, db, user_id, limit=None, offset=None, search=None):
+    """One page of a user's delivery recipients, and the total before paging.
+
+    Separate from `all` because `all` is what the CLI reads and it keeps
+    returning a plain list. Only the HTTP list route needs the count.
+    """
+    from src.models.paging import Paging
+
+    return Paging.run(db, cls._filtered(user_id, search), limit, offset)
+
+  @classmethod
+  def _filtered(cls, user_id, search=None):
+    """The select every list of a user's clients shares."""
+    from src.utils.search import Search
+
+    query = select(cls).where(cls.user_id == user_id).order_by(cls.full_name)
+
+    match = Search.match(
+      Search.like(cls.full_name, search),
+      Search.like(cls.phone, search),
+    )
+
+    if match is not None:
+      query = query.where(match)
+
+    return query
 
   @classmethod
   def get_or_create(cls, db, user_id, full_name, **fields):

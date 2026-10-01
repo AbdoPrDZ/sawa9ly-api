@@ -145,6 +145,27 @@ class Dependencies:
     return User.get_by_id(db, payload.get("sub"))
 
   @staticmethod
+  def require_user(
+    user=Depends(get_token_user),
+  ):
+    """A signed-in user of any role. A missing or stale token is a 401.
+
+    The floor the self-service routes sit on. A user managing their own account —
+    their profile, their keys — needs nothing beyond being signed in, so
+    `require_admin` would be the wrong gate twice over: it would refuse a
+    perfectly legitimate request, and it would make an ordinary account look
+    like it lacked a permission it was never asking for.
+    """
+    if user is None:
+      raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Sign in to the dashboard.",
+        headers={"WWW-Authenticate": "Bearer"},
+      )
+
+    return user
+
+  @staticmethod
   def require_admin(
     user=Depends(get_token_user),
   ):

@@ -51,9 +51,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUser(session.user)
   }, [])
 
+  // Re-read the user without touching the token. A rejected token here means the
+  // session really is over, so it signs out rather than leaving a shell that
+  // cannot load anything.
+  const refresh = useCallback(async () => {
+    try {
+      setUser(await me())
+    } catch (error) {
+      if (isUnauthorized(error)) tokenStore.clear()
+      setUser(null)
+    }
+  }, [])
+
   const value = useMemo<Session>(
-    () => ({ user, loading, signIn, signOut, invalidate: signOut }),
-    [user, loading, signIn, signOut],
+    () => ({ user, loading, signIn, signOut, invalidate: signOut, refresh }),
+    [user, loading, signIn, signOut, refresh],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

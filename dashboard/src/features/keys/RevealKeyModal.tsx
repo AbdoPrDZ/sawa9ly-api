@@ -1,5 +1,6 @@
 import { Banner } from '../../components/Banner'
 import { Modal } from '../../components/Modal'
+import { useI18n } from '../../i18n/useI18n'
 
 /** Shows a key's plaintext exactly once.
  *
@@ -7,25 +8,24 @@ import { Modal } from '../../components/Modal'
  * best-effort: clipboard access needs a secure context and may be refused.
  */
 export function RevealKeyModal({ secret, onClose }: { secret: string; onClose(): void }) {
-  return (
-    <Modal title="Copy this key now" onClose={onClose}>
-      <Banner kind="info">
-        This is the only time the key is shown. The server keeps only a hash, so it cannot be
-        shown again — if you lose it, issue a new one.
-      </Banner>
+  const { t } = useI18n()
 
-      <pre className="key-box">{secret}</pre>
+  return (
+    <Modal title={t('key.revealTitle')} onClose={onClose}>
+      <Banner kind="info">{t('key.revealBanner')}</Banner>
+
+      <pre className="secret">{secret}</pre>
 
       <div className="modal-actions">
         <button
           type="button"
-          className="ghost"
+          className="btn btn-ghost"
           onClick={() => navigator.clipboard?.writeText(secret)}
         >
-          Copy
+          {t('generic.copy')}
         </button>
-        <button type="button" className="primary" onClick={onClose}>
-          Done
+        <button type="button" className="btn btn-primary" onClick={onClose}>
+          {t('generic.done')}
         </button>
       </div>
     </Modal>
