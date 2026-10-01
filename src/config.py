@@ -217,6 +217,7 @@ class Config:
   MCP_PORT_VAR = "MCP_PORT"
   MCP_PATH_VAR = "MCP_PATH"
   MCP_PUBLIC_URL_VAR = "MCP_PUBLIC_URL"
+  MCP_FORWARDED_ALLOW_IPS_VAR = "MCP_FORWARDED_ALLOW_IPS"
 
   MCP_DEFAULT_HOST = "127.0.0.1"
   MCP_DEFAULT_PORT = 8001
@@ -274,6 +275,38 @@ class Config:
   def mcp_public_origin(cls):
     """`mcp_public_url`, or the local bind address when it is unset."""
     return cls.mcp_public_url() or f"http://{cls.mcp_host()}:{cls.mcp_port()}"
+
+  #: Loopback plus the private ranges, which is loopback plus whatever Docker
+  #: bridge or LAN reverse proxy sits in front of the port.
+  #:
+  #: Not `*`, though that would be one less thing to configure: a trusted proxy
+  #: is allowed to assert the scheme and the client address, so trusting the whole
+  #: internet would let any caller claim to be a request that arrived over TLS.
+  #: These ranges are the ones a proxy on the same machine or network can have.
+  MCP_DEFAULT_FORWARDED_ALLOW_IPS = (
+    "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+  )
+
+  @classmethod
+  def mcp_forwarded_allow_ips(cls):
+    """Which proxies' `X-Forwarded-*` headers to believe.
+
+      **This is the reason a redirect can come back as `http://`.** uvicorn reads
+      `X-Forwarded-Proto` only from a proxy it trusts, and its own default is
+      loopback alone. Behind a Docker bridge the request arrives from the
+      gateway, the header is ignored, the ASGI scope still says `http`, and
+      every `Location` the app builds — including the trailing-slash redirect a
+      client hits when it normalises `/mcp` to `/mcp/` — points at cleartext. The
+      symptom is a connector that authorizes successfully and then cannot connect,
+      because following the redirect would downgrade and re-send a bearer token.
+
+      Set it to a single address to tighten it. `*` works and trusts anything,
+      which is only defensible when nothing else can reach the port.
+    """
+    return (
+      os.getenv(cls.MCP_FORWARDED_ALLOW_IPS_VAR)
+      or cls.MCP_DEFAULT_FORWARDED_ALLOW_IPS
+    )
 
   # --- logging --------------------------------------------------------
 

@@ -47,6 +47,7 @@ Each of the three can be overridden per run: `main.py serve --port 9000`.
 | `MCP_PORT` | `8001` | |
 | `MCP_PATH` | `/mcp/` | Where the streamable-HTTP transport is mounted |
 | `MCP_PUBLIC_URL` | unset | The origin a *client* connects to |
+| `MCP_FORWARDED_ALLOW_IPS` | loopback + private ranges | Which proxies' `X-Forwarded-*` to believe |
 
 Each of the first three can be overridden per run: `main.py mcp --port 9001`.
 
@@ -61,6 +62,24 @@ on startup rather than letting a redirect go nowhere.
 These do **not** fall back to the `API_*` variables: this is a different server
 with a different credential, so a deployment that has set `API_HOST=0.0.0.0` for
 a reverse proxy has not exposed the MCP server, which is the desired outcome.
+
+### `MCP_FORWARDED_ALLOW_IPS` is not optional behind a proxy
+
+uvicorn trusts `X-Forwarded-Proto` only from an address on this list, and its own
+default is loopback alone. Behind a Docker bridge or a LAN proxy the request
+arrives from somewhere else, the header is ignored, the ASGI scope still says
+`http`, and every `Location` the app builds comes back as **`http://`** —
+including the trailing-slash redirect a client hits when it normalises `/mcp` to
+`/mcp/`.
+
+The symptom is a connector that authorizes successfully and then cannot connect:
+following the redirect would downgrade to cleartext and re-send a bearer token. If
+Claude reports "your account was authorized but the server returned an error when
+connecting", this is the first thing to check.
+
+The default covers loopback and the private ranges, which is loopback plus a
+Docker bridge or a LAN proxy. `*` trusts anything and is only defensible when
+nothing else can reach the port.
 
 `MCP_HOST` defaults to loopback rather than to `API_HOST` because an MCP client
 is normally another process on this machine. A token in an MCP client has to be

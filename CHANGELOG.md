@@ -11,6 +11,33 @@ file, so there is no second place to update.
 
 ## [Unreleased]
 
+### Fixed - every redirect came back as `http://` behind a reverse proxy
+
+- **The reason a connector could authorize and then not connect.** uvicorn reads
+  `X-Forwarded-Proto` only from a proxy on `forwarded_allow_ips`, and its own
+  default is loopback alone. Behind a Docker bridge the request arrives from the
+  gateway, so the header nginx sets correctly is ignored, the ASGI scope still
+  says `http`, and every `Location` the app builds is `http://` - including the
+  trailing-slash redirect a client hits normalising `/mcp` to `/mcp/`. Following
+  it would downgrade to cleartext and re-send a bearer token, so Claude's log
+  filled with `POST /mcp 307` and it gave up.
+- `MCP_FORWARDED_ALLOW_IPS` sets the trust list, defaulting to loopback plus the
+  private ranges - loopback plus a Docker bridge or a LAN proxy, and not `*`,
+  because a trusted proxy may assert the scheme and the client address. Verified
+  by A/B: the same request from a non-loopback address returns `location: http://`
+  with the list narrowed to loopback, and `location: https://` with the default.
+
+### Fixed - the model-facing instructions denied tools that do exist
+
+- `INSTRUCTIONS` said "there is no tool that changes a cart" while `tools/list`
+  returned `add_product_to_cart` and `remove_product_from_cart`. They belong to
+  `ProductsTools` - `/api/v1/products/{id}/cart`, a product operation that happens
+  to have a cart as a side effect - so switching off `CartTools` does not make
+  them unreachable. The text now says what is true: products can be added and
+  removed, and nothing sets a price, submits, or orders. "The resource is
+  switched off" and "nothing here touches it" are different claims, and only the
+  first follows from `TOOL_GROUPS`.
+
 ### Fixed — an occupied port says so, instead of raising `Errno 10048`
 
 - `main.py serve` and `main.py mcp` now check the port before they build

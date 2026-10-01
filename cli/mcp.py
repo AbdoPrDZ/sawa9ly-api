@@ -58,6 +58,14 @@ class McpCli:
       host=args.host,
       port=args.port,
       path=args.path,
+      # Without this, uvicorn believes `X-Forwarded-Proto` only from loopback —
+      # and a request arriving over a Docker bridge is ignored, so every
+      # `Location` the app builds comes back as `http://` and a connector that
+      # authorized successfully cannot connect. See `Config.mcp_forwarded_allow_ips`.
+      uvicorn_config={
+        "proxy_headers": True,
+        "forwarded_allow_ips": Config.mcp_forwarded_allow_ips(),
+      },
     )
 
   @staticmethod

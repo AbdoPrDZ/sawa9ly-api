@@ -102,10 +102,19 @@ it does on the API:
 it is in that tuple. The other six are written and switched off.
 
 So today an agent can look at a product, keep a catalogue of what it saw, and
-write landing pages. It **cannot drive a cart or place an order**, which is the
-half worth being careful about: an order submitted to sawa9ly.app cannot be
-cancelled from here. Turning those resources on is uncommenting an import and a
-tuple entry; the module, the per-credential ownership scoping and the sign-in are
+write landing pages. It **cannot set a price, submit a cart, or place an order**,
+which is the half worth being careful about: an order submitted to sawa9ly.app
+cannot be cancelled from here.
+
+Two tools do move the cart — `add_product_to_cart` and `remove_product_from_cart`
+— which is worth being precise about, because "the cart resource is switched off"
+does not mean "nothing here touches the cart". They belong to the *product*
+resource (`/api/v1/products/{id}/cart`): a product operation that happens to
+have a cart as its side effect. What is absent is everything that would turn
+that into an order.
+
+Turning the remaining resources on is uncommenting an import and a tuple entry;
+the module, the per-credential ownership scoping and the sign-in are already
 already there.
 
 When they are on, both checkout tools take `dry_run`, which stages the cart and

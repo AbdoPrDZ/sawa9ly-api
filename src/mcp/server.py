@@ -49,19 +49,28 @@ from src.version import VERSION
 #: Kept in step with `TOOL_GROUPS` deliberately: this is text handed to a language
 #: model, and a model told about a tool that is not registered will ask for it and
 #: get "no such tool", which it has to work around rather than being told plainly.
-#: So there is nothing here about a cart or about ordering — the resources that
-#: would carry those are written but not switched on. When one is, its checkout
-#: warning belongs here, because an order placed on sawa9ly.app cannot be
-#: cancelled from here.
+#: So there is nothing here about ordering — the resources that would carry that
+#: are written but not switched on. When one is, its checkout warning belongs
+#: here, because an order placed on sawa9ly.app cannot be cancelled from here.
+#:
+#: The line about the cart is the one that has to be *accurate in both
+#: directions*. It cannot say nothing changes a cart, because `ProductsTools`
+#: carries `add_product_to_cart` and `remove_product_from_cart` — they belong to
+#: `/api/v1/products/{id}/cart`, which is a product operation that happens to touch
+#: the cart, not one of the switched-off cart resources. What is true is that
+#: nothing here *prices* a cart, submits one, or creates an order.
 INSTRUCTIONS = """\
-Read-only tools for sawa9ly.app, an Algerian dropshipping site: look up a product
-page, keep a catalogue of what you have seen, and write landing pages.
+Tools for sawa9ly.app, an Algerian dropshipping site: look up a product page,
+keep a catalogue of what you have seen, write landing pages, and add or remove a
+product from the cart.
 
-Every tool acts for the account whose API key this client was configured with —
-not for the operator — and can reach that account's data and nothing else.
+Every tool acts for the account this client authenticated as — not for the
+operator — and can reach that account's data and nothing else. Its cart is the
+one you are editing, and another client's is a different cart entirely.
 
-There is no tool that changes a cart or places an order, so nothing you can call
-here spends money or creates an order on the site.
+No tool here sets a price or a quantity, submits a cart, or creates an order, so
+nothing you can call places an order on the site. If a person asks you to order,
+you cannot: tell them so rather than assembling a cart and implying otherwise.
 """
 
 #: The resources this server serves, in the order `create_app` mounts the

@@ -128,6 +128,14 @@ purpose — it is text handed to a language model, and a model told about a tool
 that is not registered will ask for it and get "no such tool" rather than being
 told plainly that there is none.
 
+**Being off is not the same as being unreachable, and that distinction bit.** With
+`CartTools` switched off, `tools/list` still returns `add_product_to_cart` and
+`remove_product_from_cart`, because they belong to `ProductsTools` — they are
+`/api/v1/products/{id}/cart`, a product operation that happens to touch the cart.
+So `INSTRUCTIONS` once claimed "there is no tool that changes a cart", which the
+registry contradicted on its very next line. It now says what is actually true:
+products can be added and removed, and nothing sets a price, submits, or orders.
+
 The mirroring rule is otherwise unchanged: an operation in one front end and not
 the others is unfinished work.
 
