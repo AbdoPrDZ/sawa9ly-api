@@ -7,57 +7,81 @@ landing pages. It does not yet drive a cart or place an order — see
 [the tools](#the-tools).
 
 ```bash
-python main.py apikey create --type mcp     # the client needs a key
-python main.py mcp                          # 127.0.0.1:8001/mcp/
+python main.py mcp            # 127.0.0.1:8001/mcp/
 ```
 
 Defaults come from `MCP_HOST`, `MCP_PORT` and `MCP_PATH`, and each has a flag:
 `main.py mcp --port 9001`. In containers it is the `mcp` service in either compose
 stack — see [../start/docker.md](../start/docker.md).
 
-## Pointing a client at it
+## Two ways in
 
-The server speaks MCP over streamable HTTP at `http://127.0.0.1:8001/mcp/`. The
-client needs the URL and the key, and nothing else — no user name, because the
-server has no user of its own:
+| | Sign in | An MCP API key |
+| --- | --- | --- |
+| Good for | Claude, an IDE, anything with a browser | a script, a test, another service |
+| Set up | nothing — the connector asks for it | `apikey create --type mcp` |
+| Expires | an hour, refreshed silently | when you revoke it |
+| Sent as | a bearer token, by the client | `Authorization: Bearer sk_...` |
 
-```json
-{
-  "mcpServers": {
-    "sawa9ly": {
-      "url": "http://127.0.0.1:8001/mcp/",
-      "headers": { "X-API-Key": "sk_..." }
-    }
-  }
-}
+Either way the tools act as that account, see its cart, and cannot reach another's.
+
+**Sign in is the interesting one.** Claude's connector flow is OAuth 2.1, and this
+server is its own authorization server: the connector sends a person to
+`/oauth/authorize`, they type their **dashboard** username and password, and the
+server hands back a signed token naming them. There is no third-party identity
+provider in the middle and no mapping somebody else's account onto yours —
+signing in *is* the lookup.
+
+FastMCP does all of the protocol around that: the discovery documents, dynamic
+client registration, PKCE, resource binding, Claude's published client identity,
+and the short-lived token the connector actually holds. This project supplies the
+password check and the tokens it mints.
+
+### Pointing a connector at it
+
+Give it the URL and nothing else — no key, no user name:
+
+```
+https://mcp.example.com/mcp/
 ```
 
-`Authorization: Bearer sk_...` works as well.
+In the connector's **Authentication** section choose **Sign in now** and leave the
+OAuth client on the default, *Use Claude's published identity*. Both the server and
+`MCP_PUBLIC_URL` must be reachable over **https**; a remote connector refuses
+plain HTTP.
 
-**The trailing slash on the path matters.** The transport is mounted as a prefix,
-and a client pointed at `/mcp` without one gets a redirect rather than a session.
+`MCP_PUBLIC_URL` has to be the address the outside world uses — your tunnel or
+reverse proxy — and it is not the same as `MCP_HOST`, which is what the process
+binds inside the container. `main.py mcp` prints the URL to paste and tells you if
+it will not work.
 
-## The key is a different kind of key
+The trailing slash on the path matters: the transport is mounted as a prefix, and
+a client pointed at `/mcp` without one gets a redirect rather than a session.
 
-`--type mcp` is not decoration. An API key is refused by the MCP server and an MCP
-key is refused by `/api` — including `/api/admin`. They are separate because they
-are handed to different things: an API key is typed into a script by its owner,
-while an MCP key is typed into an AI agent's client configuration, which means it
-lands in transcripts, tool arguments and whatever context the model is given, and
-it cannot be scoped down per-call the way a shell variable can. One key accepted
-by both surfaces would put `/api/admin` behind a token that is by construction read
-by a language model.
+### Using a key instead
 
-A key of the wrong type is reported as *unknown*, exactly like a string that was
-never a key, so a refused key cannot be used to confirm that somebody else's
-credential exists.
+```bash
+python main.py apikey create --type mcp --label "my agent"
+```
+
+Then configure the client with a header:
+
+```json
+{ "headers": { "Authorization": "Bearer sk_..." } }
+```
+
+`Authorization: Bearer`, **not** `X-API-Key`. That is the header OAuth defines and
+the only one an MCP client sends; the HTTP API's `X-API-Key` is not read here.
+
+A key of type `api` is refused, and so is a missing one — the connector will not
+list the tools until it has signed in.
 
 ## What each client gets
 
-The key identifies the user, and everything follows from that the same way it does
-on the API:
+The credential identifies the user, and everything follows from that the same way
+it does on the API:
 
-- no tool takes a user name — the caller is whoever's key was presented;
+- no tool takes a user name — the caller is whoever signed in;
 - each key gets its own sawa9ly session, so **two clients never share a cart**;
 - landing pages are the caller's own and no tool reaches another's.
 
@@ -81,8 +105,8 @@ So today an agent can look at a product, keep a catalogue of what it saw, and
 write landing pages. It **cannot drive a cart or place an order**, which is the
 half worth being careful about: an order submitted to sawa9ly.app cannot be
 cancelled from here. Turning those resources on is uncommenting an import and a
-tuple entry; the module, the per-key auth and the ownership scoping are already
-there.
+tuple entry; the module, the per-credential ownership scoping and the sign-in are
+already there.
 
 When they are on, both checkout tools take `dry_run`, which stages the cart and
 stops before the form, and both describe themselves as irreversible when it is
@@ -90,14 +114,20 @@ false. Do a `dry_run` first whenever the quantities, the prices or the recipient
 are uncertain — it is the only way to see what the site thinks the order costs
 before committing to it.
 
-## `tools/list` is not authenticated
+## Tokens
 
-Anything that can reach the port sees all 10 tool names and descriptions without
-presenting a key. Every tool *call* needs one; the catalogue of tools does not.
+An access token lasts **an hour** and is refreshed silently by the connector. It is
+signed, not stored, so there is no table of them.
 
-That is how MCP servers normally behave, and it is why `MCP_HOST` defaults to
-loopback and the compose stack publishes it on `127.0.0.1`. To reach it from
-another machine, put something in front of it that checks the key.
+**They cannot be revoked one at a time.** A token stops working when it expires,
+or immediately for everyone when the signing key is rotated — delete the
+`mcp_token` row from `app_secrets` and sign in again. That is the deliberate
+trade: a table with per-token revocation would be a second answer to "who is
+signed in", and the project already has one, the `users` table. The dashboard's own
+session tokens work the same way, for twelve hours.
+
+An API key, if that is what you used, is revocable individually like any other:
+`apikey revoke <prefix>`.
 
 ## What is different from the HTTP API
 
@@ -109,8 +139,8 @@ left to borrow one for — and a caller missing their own credentials is told so
 name, with the command to fix it, rather than being quietly served by a stranger's
 session.
 
-The other two catalogue tools are the mirror image: the rows belong to no user,
-so `list_catalogue` and `get_catalogue_product` resolve the caller for no reason
+The other two catalogue tools are the mirror image: the rows belong to no user, so
+`list_catalogue` and `get_catalogue_product` resolve the caller for no reason
 except to require the credential. They do it anyway — a tool surface where three
 local-table tools need no key is a surface where nothing does.
 

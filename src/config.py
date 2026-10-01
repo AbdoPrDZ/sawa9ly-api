@@ -216,6 +216,7 @@ class Config:
   MCP_HOST_VAR = "MCP_HOST"
   MCP_PORT_VAR = "MCP_PORT"
   MCP_PATH_VAR = "MCP_PATH"
+  MCP_PUBLIC_URL_VAR = "MCP_PUBLIC_URL"
 
   MCP_DEFAULT_HOST = "127.0.0.1"
   MCP_DEFAULT_PORT = 8001
@@ -224,7 +225,7 @@ class Config:
   """A server of its own, on a port of its own.
 
     Deliberately not the API's host and port, and not mounted under /api. The MCP
-    server authenticates with a different kind of key, so it is a separate
+    server authenticates with different credentials, so it is a separate
     process answering on a separate port: binding it beside the API would mean
     one restart takes both down, and putting it under /api would put a second
     credential on a path that is already public contract.
@@ -251,6 +252,28 @@ class Config:
     a redirect that some clients will not follow.
     """
     return os.getenv(cls.MCP_PATH_VAR) or cls.MCP_DEFAULT_PATH
+
+  @classmethod
+  def mcp_public_url(cls):
+    """The origin Claude connects to, e.g. `https://mcp.example.com`.
+
+      **Required for OAuth, and not the same thing as `MCP_HOST`.** OAuth hands
+      the client a set of absolute URLs to redirect to and exchange tokens with,
+      and a redirect pointing at the container's own address is a browser that
+      cannot reach it. So this is the address the *outside world* uses, which is
+      whatever tunnel or reverse proxy fronts the port — and it must be
+      `https`, because a remote MCP connector refuses anything else.
+
+      Unset, it falls back to the local bind address, which is enough for a
+      client on this machine and silently wrong for a public one. The server says
+      so on startup rather than letting a redirect go nowhere.
+    """
+    return (os.getenv(cls.MCP_PUBLIC_URL_VAR) or "").rstrip("/") or None
+
+  @classmethod
+  def mcp_public_origin(cls):
+    """`mcp_public_url`, or the local bind address when it is unset."""
+    return cls.mcp_public_url() or f"http://{cls.mcp_host()}:{cls.mcp_port()}"
 
   # --- logging --------------------------------------------------------
 

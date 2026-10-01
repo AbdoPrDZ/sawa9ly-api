@@ -67,11 +67,16 @@ src/
     admin_orders.py         admin: every user's orders (super only)
   mcp/                      the MCP server: one module per resource
     __init__.py
-    server.py               McpServer: assembles the tools (TOOL_GROUPS)
+    server.py               McpServer: assembles the tools (TOOL_GROUPS) and auth
     auth.py                 McpAuth: the caller, their Livewire, their cart
     errors.py               McpError / McpAuthError: refusals with no HTTP status
+    authorization.py        the OAuth server: sign-in page, tokens, the code
+    handlers.py             authorize and token, as ASGI request handlers
+    verifier.py             McpTokens: checks an access token we signed
+    api_keys.py             McpApiKeys: an MCP API key as a bearer credential
     products.py, cart.py, checkout.py, catalogue.py, clients.py, orders.py,
     pages.py, trackers.py, telegram.py
+theme.py                   the dark palette, shared by the two hand-written pages
 dashboard/                 admin dashboard (React + Vite); only dist/ is served
 database/                   SQLite database (gitignored)
 data/                       working state: the lock files (gitignored)

@@ -144,16 +144,19 @@ services:
     # the test is replaced rather than disabled: this one is a real liveness
     # probe, not a formality.
     #
-    # The MCP mount answers a GET with **406 Not Acceptable** - the streamable-HTTP
-    # transport only accepts a POST with a JSON-RPC body. That 406 is the healthy
-    # answer, and it is a better probe than "the port is open": a refused
-    # connection means the server is down, and a 404 means MCP_PATH is wrong, so
-    # all three failures are distinguishable where a bare socket check would see
-    # them all as success. `http.client` rather than `urllib` because urllib
-    # raises on a 4xx, and inverting that exception is what keeps this to one
-    # line.
+    # A plain GET on the MCP mount is refused — **401** with a WWW-Authenticate
+    # challenge, because the endpoint demands a bearer token and a GET carries
+    # none. That 401 is the healthy answer, and it is a better probe than "the
+    # port is open": a refused connection means the server is down, and a 404
+    # means MCP_PATH is wrong, so all three failures are distinguishable where a
+    # bare socket check would call them all success. 406 is accepted too, because
+    # that is what the same endpoint answers when the transport is reached
+    # without the Accept header it wants.
+    #
+    # `http.client` rather than `urllib` because urllib raises on a 4xx, and
+    # inverting that exception is what keeps this to one line.
     healthcheck:
-      test: ["CMD", "python", "-c", "import http.client,os,sys;c=http.client.HTTPConnection('127.0.0.1',int(os.getenv('MCP_PORT','8001')),timeout=4);c.request('GET',os.getenv('MCP_PATH','/mcp/'));r=c.getresponse();sys.exit(0 if r.status==406 else 1)"]
+      test: ["CMD", "python", "-c", "import http.client,os,sys;c=http.client.HTTPConnection('127.0.0.1',int(os.getenv('MCP_PORT','8001')),timeout=4);c.request('GET',os.getenv('MCP_PATH','/mcp/'));r=c.getresponse();sys.exit(0 if r.status in (401,406) else 1)"]
       interval: 30s
       timeout: 5s
       start_period: 20s

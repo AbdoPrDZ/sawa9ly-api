@@ -1,52 +1,100 @@
 # MCP
 
-A third front end, after the CLI and the HTTP API, over the same services.
-FastMCP, in `src/mcp/`, served by `python main.py mcp` — which is a command in
-`cli/mcp.py` and nothing else: the package builds the server, the command serves
-it.
+A third front end, alongside the CLI and the HTTP API, over the same services,
+served by `python main.py mcp` — which is a command in `cli/mcp.py` and nothing
+else: the package builds the server, the command serves it.
 
 Its own process, on its own port (`MCP_HOST`/`MCP_PORT`, default
 `127.0.0.1:8001`), with the streamable-HTTP transport at `MCP_PATH`
 (`/mcp/`). Not mounted on the FastAPI app and not under `/api`, for the same
-reason the key type is separate: a different credential on a path that is already
-published contract would make one restart take both surfaces down.
+reason the credential is separate: a different key on a path that is already
+published contract would mean one restart takes both surfaces down.
+
+`MCP_PUBLIC_URL` is a **third** address and the easiest to get wrong. It is what a
+client connects to — what the sign-in redirect sends a browser to — and it is
+neither the bind address nor the published one. It must be https; a remote
+connector refuses plain HTTP.
 
 ## Why it is not just another route
 
-An MCP client is a language model, not a script. Three things follow, and they are
+An MCP client is a language model, not a script. Four things follow, and they are
 the only things that differ from a controller:
 
-- **Authentication is per call.** A shell gets `--user`; a process serving many
-  clients gets the key on the request headers. There is no default user and no
-  `--user` on `mcp` — the server has no user of its own to be told about.
+- **Authentication is OAuth or a key, resolved per call.** A shell gets
+  `--user`; a request gets a bearer token, because one process serves every
+  client.
 - **Failures are raised, never returned.** A tool that answered `{"error": ...}`
   would be a *successful* call carrying a failure the model has to notice. See
-  `errors.py`, which exists because the refusals that HTTP can express as 404 and
-  409 have no equivalent here.
+  `errors.py`.
 - **The docstring is the interface.** FastMCP derives a tool's input schema from
   its signature and its description from its docstring, so a tool's prose has to
-  say what it is *for*. This is why the checkout tools spell out that a
-  non-`dry_run` call places an order that cannot be cancelled.
+  say what it is *for*.
+- **`INSTRUCTIONS` has to stay in step with `TOOL_GROUPS`.** It is text handed to
+  a model, and a model told about a tool that is not registered asks for it and
+  gets "no such tool" rather than being told there is none.
+
+## The sign-in
+
+Claude's connector flow is OAuth 2.1, and **this project is its own authorization
+server**. FastMCP's `OAuthProxy` presents the entire client-facing protocol — the
+RFC 8414 and RFC 9728 discovery documents, DCR, PKCE, resource indicators, CIMD,
+the short-lived reference JWT — and proxies it to an upstream AS. Every upstream
+FastMCP ships is somebody else's (Auth0, WorkOS, Keycloak…). Ours is
+`authorization.py`, and it is ours because the project already has what an AS
+needs and an IdP does not: a table of users with real passwords on it.
+
+**So signing in is the user lookup.** A hosted IdP hands over a subject like
+`auth0|abc123` and leaves the work of mapping it to a sawa9ly user; here the
+person types their dashboard password and `User.check_password` resolves them
+directly.
+
+The division, worth keeping straight:
+
+| | owns |
+| --- | --- |
+| `OAuthProxy` (FastMCP) | discovery, DCR, CIMD, PKCE, resource binding, refresh, the token the client holds |
+| `authorization.py` | the sign-in page, the password check, the authorization code, the tokens we mint |
+| `verifier.py` | checking one of our own tokens |
+| `api_keys.py` | the other credential: an `mcp` API key |
+
+Three things about the arrangement that cost time and should not be rediscovered:
+
+- **`resource_base_url` is a base, not the resource.** FastMCP appends
+  `mcp_path` to it, so passing the full path yields `.../mcp/mcp/` and *every*
+  authorize request is refused as a resource mismatch. Pass the origin.
+- **`require_authorization_consent="external"`.** The default shows the proxy's
+  own consent page between the person and the login, asking about a decision they
+  have already made by typing their password.
+- **`verify_token` receives *our* token, not the client's.** The client holds a
+  reference JWT whose only real claim is a `jti`; FastMCP resolves that to the
+  upstream token and hands us ours. So the verifier is a signature check and a
+  claim read — no introspection endpoint and no jti table, despite the reference
+  token making it look otherwise.
+
+Tokens are signed and stateless, in the same shape as the dashboard's
+(`utils/tokens.py`), with the key in `app_secrets`. **They cannot be revoked
+individually** — an hour's life, or rotate the secret for everybody. Deliberate:
+a per-token table would be a second answer to "who is signed in" and this project
+has one, the `users` table. `typ` is in the payload so an access token and a
+refresh token cannot be used for each other.
 
 ## The credential
 
-`McpAuth` resolves the caller from the key on the current request, and only a key
-of type `mcp`. Everything else follows from "the key identifies the user" exactly
-as on `/api/v1`: no user in the arguments, one `Livewire` per user, one cart each.
+`McpAuth` turns an `AccessToken` into a `User`, and **re-reads it from the
+database** rather than trusting the claim — so a deleted account loses access
+immediately, not at expiry. Everything after that follows from "the key
+identifies the user" exactly as on `/api/v1`: no user in the arguments, one
+`Livewire` per user, one cart each.
 
-Two library details cost real time and are worth not rediscovering:
+**Two credentials reach it.** `MultiAuth` takes the proxy and, after it,
+`McpApiKeys` — so an OAuth token and an `mcp` API key both arrive as the same
+thing and nothing downstream knows which was used.
 
-- `get_http_headers()` **lowercases every name**. Looking a header up as
-  `X-API-Key` returns nothing, and a perfectly valid key reads as absent. The
-  constant is `x-api-key` for that reason.
-- the same call **strips `authorization`** unless it is named in `include`. Both
-  accepted headers are therefore requested explicitly; `cookie` is not, which is
-  deliberate — this project has real session cookies and no reason to read them.
-
-`tools/list` is *not* authenticated. Anything that can reach the port sees every
-tool name and description; every tool *call* needs a key. That is how MCP servers
-normally behave, and the default bind is loopback. Closing it would mean an
-`AuthProvider`, which is a deployment story this project does not have yet.
+One library detail worth keeping: the key arrives as `Authorization: Bearer`, not
+`X-API-Key`. That is the header OAuth defines and the only one an MCP client
+sends, and FastMCP's auth middleware runs *before* any middleware a caller adds —
+so normalising the other spelling means wrapping the ASGI app outside what
+`run()` builds. Not worth it.
 
 ## One divergence from the HTTP API, on purpose
 
@@ -98,16 +146,19 @@ Two things about it that are not obvious from the service block:
 - **It replaces the image's health check rather than disabling it.** The image's
   probe asks for `/docs`, which this container does not serve, so it would report
   permanently unhealthy the way `telegram` and `cron` do. The replacement asserts
-  the mount answers a `GET` with **406 Not Acceptable** — the streamable-HTTP
-  transport only accepts a JSON-RPC `POST` — and that 406 is the healthy answer.
-  It separates three failures a socket check calls identical: refused means the
-  server is down, 404 means `MCP_PATH` is wrong. `http.client` rather than
-  `urllib`, because urllib raises on a 4xx and inverting that is what keeps the
-  probe to one line.
-- **`MCP_PUBLISHED_HOST` is not `MCP_HOST`.** The container binds `0.0.0.0`
-  because the loopback interface in there is the container's own; the host side
-  defaults to `127.0.0.1`. `serve` got `API_PUBLISHED_HOST` for the same reason,
-  and the pair is split in both stacks.
+  the MCP mount *refuses* a plain `GET` — 401 with a `WWW-Authenticate` challenge,
+  or 406 without the `Accept` header it wants. That separates three failures a
+  socket check calls identical: refused means the server is down, 404 means
+  `MCP_PATH` is wrong. `http.client` rather than `urllib`, because urllib raises on
+  a 4xx and inverting that is what keeps the probe to one line.
+- **`MCP_PUBLISHED_HOST` is not `MCP_HOST` and not `MCP_PUBLIC_URL`.** Three
+  addresses, three questions: what the process binds in there, what Docker
+  exposes on the machine, and what a client connects to. `serve` got
+  `API_PUBLISHED_HOST` for the same reason.
+
+With sign-in in place, loopback is protecting something slightly different than it
+was: not `tools/list` (which now demands a credential like everything else) but
+the **discovery documents**, which are readable by anyone who can reach the port.
 
 ## Shape
 

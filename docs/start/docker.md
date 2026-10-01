@@ -63,18 +63,31 @@ deliberate act:
 MCP_PUBLISHED_HOST=0.0.0.0     # in .env.docker
 ```
 
-Do that for `mcp` only with something in front of it that checks the key.
-**`tools/list` is not authenticated** — anything that can reach the port sees every
-tool name and description without presenting one. Every tool *call* needs a key of
-type `mcp`, but the list of tools is open.
+Do that for `mcp` only with something in front of it. And note that with sign-in
+in place the loopback default matters slightly differently than it did for the
+API: a request with no credentials is refused outright, so what loopback protects
+is the **discovery documents** — `/.well-known/oauth-protected-resource/mcp/` and
+`/.well-known/oauth-authorization-server` — which are readable by anyone who can
+reach the port and name the server's endpoints.
+
+`MCP_PUBLIC_URL` is a third address, and the easiest one to get wrong. It is what
+`main.py mcp` calls the public URL: the origin a *client* connects to, which the
+sign-in redirect sends a browser to. It is neither `MCP_HOST` (what the process
+binds in there) nor `MCP_PUBLISHED_HOST` (what Docker exposes), and it must be
+`https` — Claude and every other remote MCP connector refuse plain HTTP.
+
+```bash
+MCP_PUBLIC_URL=https://mcp.example.com    # in .env.docker
+```
 
 The `mcp` container replaces the image's health check rather than disabling it.
-The image's check asks for `/docs`, which that container does not serve; the
-replacement asserts that the MCP mount answers a `GET` with **406 Not
-Acceptable**, which is what the streamable-HTTP transport returns for anything but
-a JSON-RPC `POST`. That 406 is the healthy answer, and it distinguishes three
-failures a bare socket check would call identical: a refused connection is the
-server being down, and a 404 is `MCP_PATH` being wrong.
+The image's probe asks for `/docs`, which that container does not serve; the
+replacement asserts that the MCP mount *refuses* a plain `GET` — **401** with a
+`WWW-Authenticate` challenge, because the endpoint demands a bearer token, or 406
+when it is reached without the `Accept` header it wants. That is the healthy
+answer, and it distinguishes three failures a bare socket check would call
+identical: a refused connection is the server being down, and a 404 is
+`MCP_PATH` being wrong.
 
 **Talking to a running container.** The CLI is installed in the image as
 `sawa9ly-api`, so a running container can be asked questions without a shell in it:

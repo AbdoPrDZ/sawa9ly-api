@@ -49,7 +49,7 @@ test can change the environment and re-read.
 | --- | --- | --- |
 | Database | `DATABASE_URL`, or `SQLITE_FILE`; or `DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | SQLite at `database/sawa9ly.db` |
 | HTTP server | `API_HOST`, `API_PORT`, `API_RELOAD` | `127.0.0.1:8000`, reload off |
-| MCP server | `MCP_HOST`, `MCP_PORT`, `MCP_PATH` | `127.0.0.1:8001`, `/mcp/` |
+| MCP server | `MCP_HOST`, `MCP_PORT`, `MCP_PATH`, `MCP_PUBLIC_URL` | `127.0.0.1:8001`, `/mcp/`, no public URL |
 | Locations | `DATABASE_DIR`, `DATA_DIR`, `LOG_DIR`, `LOCK_DIR` | `database`, `data`, `logs`, and `DATA_DIR` for the locks |
 | Logging | `LOG_LEVEL`, `LOG_FILE`, `LOG_FORMAT` | `INFO`, five files, text |
 | Super admin | `SUPER_ADMIN_USERNAME`, `SUPER_ADMIN_PASSWORD` | none — both required |
@@ -67,7 +67,7 @@ API puts it in the URL of every call, so `requests` quotes it in error messages.
 with `getMe`, so a link cannot name a bot the token does not belong to. See
 `domains/telegram.md`.
 
-## The MCP server's own three settings
+## The MCP server's own settings
 
 `MCP_HOST`/`MCP_PORT`/`MCP_PATH` are the API's three with different names, and the
 naming is the point: they are a different server on a different port with a
@@ -75,15 +75,32 @@ different credential, so they do not fall back to `API_*`. A deployment that set
 `API_HOST=0.0.0.0` for a reverse proxy has **not** exposed the MCP server, and
 that is the desired outcome — the MCP surface can place orders.
 
+`MCP_PUBLIC_URL` is a **third** address, and the easiest one to get wrong,
+because it is not either of the other two:
+
+| | the question it answers |
+| --- | --- |
+| `MCP_HOST` | what the process binds *inside* the container — `0.0.0.0` under Docker, or the port mapping goes nowhere |
+| `MCP_PUBLISHED_HOST` | what Docker exposes on the machine — `127.0.0.1` by default |
+| `MCP_PUBLIC_URL` | what a *client* connects to, which is what the sign-in redirect sends a browser to |
+
+It must be `https`: Claude and every other remote MCP connector refuse plain
+HTTP, so an unset or `http://` value fails at the connector rather than in this
+container. `main.py mcp` prints the URL to paste and says which of these is wrong.
+
 `MCP_PATH`'s trailing slash is load-bearing. The streamable-HTTP transport is
 mounted as a prefix, and a client pointed at `/mcp` without the slash gets a
 redirect rather than a session.
 
+## The MCP server's own settings
+
 `MCP_HOST` defaults to loopback rather than to `API_HOST`, because an MCP client
 is normally another process on the same machine. Setting it to `0.0.0.0` is
 allowed and is not warned about — it is a legitimate container deployment — but
-`tools/list` is unauthenticated, so anything that can reach the port sees the
-whole tool set. See `mcp.md`.
+with sign-in in place what loopback protects is smaller than it looks: the
+endpoint itself demands a credential, and what is still open to anyone who can
+reach the port is the pair of discovery documents under `/.well-known/`. See
+`mcp.md`.
 
 ## The default user is the super admin
 

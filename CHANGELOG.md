@@ -11,6 +11,70 @@ file, so there is no second place to update.
 
 ## [Unreleased]
 
+### Added — signing in to the MCP server, with no third-party identity provider
+
+- **The MCP server is its own OAuth authorization server.** Claude's connector
+  flow is OAuth 2.1 with CIMD, and FastMCP's `OAuthProxy` presents that whole
+  client-facing protocol — the RFC 8414 and RFC 9728 discovery documents, dynamic
+  client registration, PKCE, resource binding, Claude's published client identity,
+  the short-lived reference token — and proxies it to an upstream AS. Every
+  upstream FastMCP ships is somebody else's: Auth0, WorkOS, Keycloak, Google.
+
+  This project is the upstream. It has to be, because it already has what an AS
+  needs and an IdP does not: a table of users with real passwords on it. A hosted
+  provider hands back a subject like `auth0|abc123` and leaves the work of mapping
+  it to a sawa9ly account; here the person types their **dashboard** username and
+  password, `User.check_password` resolves them, and the connector gets a token
+  naming them. Signing in *is* the lookup, so there is no identity-mapping problem
+  and no third party between you and your own account.
+  - Connect with **Sign in now** and leave the OAuth client on the default, *Use
+    Claude's published identity*. Both work.
+  - The sign-in page is served from the MCP server itself, sandboxed and
+    `no-store`. A wrong password says nothing about which half was wrong, so the
+    endpoint is not a way to enumerate accounts.
+- **Tokens are signed and stateless**, in the same shape as the dashboard's but
+  with a different issuer — so one verifier can never accept the other's tokens.
+  An access token lasts an hour and is refreshed silently; a refresh token cannot
+  be used as a bearer credential, and an access token cannot mint one.
+  **They cannot be revoked individually**: an hour's life, or rotate the
+  `mcp_token` row in `app_secrets` and sign in again. Deliberate — a per-token
+  table would be a second answer to "who is signed in" and the project already
+  has one, the `users` table. The dashboard's own session tokens work the same way,
+  for twelve hours.
+- **`MCP_PUBLIC_URL`**, the address a *client* connects to. A third address,
+  alongside the two Docker already has: not `MCP_HOST` (what the process binds
+  inside the container) and not `MCP_PUBLISHED_HOST` (what Docker exposes on the
+  machine). It is what the sign-in redirect sends a browser to, and it must be
+  https — a remote connector refuses plain HTTP. `main.py mcp` prints the URL to
+  paste and says which of these is wrong.
+- **Both credentials still work.** An OAuth access token *or* an API key of type
+  `mcp`, through `MultiAuth`, resolving to the same per-user session and the same
+  cart. A scripted client keeps working.
+
+### Changed — an MCP API key is now sent as a bearer credential
+
+- **`Authorization: Bearer sk_...`, not `X-API-Key`.** OAuth defines one header for
+  a bearer token and every MCP client sends that one. FastMCP's auth middleware
+  runs before any middleware a caller adds, so a request carrying only
+  `X-API-Key` is refused before a normaliser could rewrite it — accepting both
+  would mean wrapping the ASGI app outside what `run()` builds, which is a lot of
+  fragile arithmetic to preserve a second spelling of the same credential. The
+  HTTP API's `X-API-Key` is unaffected.
+
+### Changed — `tools/list` is no longer open, which changes what loopback protects
+
+- With auth on the whole endpoint, a request with no credentials is refused
+  before it reaches a tool, so the list of 10 tool names and descriptions is no
+  longer readable by anyone who can reach the port. What *is* still open is the
+  pair of discovery documents under `/.well-known/`, which name the server's
+  endpoints. `MCP_HOST` still defaults to loopback and the compose stack still
+  publishes on `127.0.0.1`; it is protecting a smaller thing than it was.
+- **The `mcp` container's health check now asserts a 401**, not a 406. The mount
+  refuses a plain `GET` because the endpoint demands a bearer token, and that
+  refusal is the healthy answer. 406 is still accepted for the same endpoint
+  reached without the `Accept` header it wants. Both separate a server that is
+  down from an `MCP_PATH` that is wrong, where a socket check calls both success.
+
 ### Added — an MCP server, and a second kind of API key
 
 - **An MCP server**, so an AI agent can drive the client with the same operations

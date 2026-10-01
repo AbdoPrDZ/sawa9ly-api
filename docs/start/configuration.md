@@ -43,19 +43,30 @@ Each of the three can be overridden per run: `main.py serve --port 9000`.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `MCP_HOST` | `127.0.0.1` | |
+| `MCP_HOST` | `127.0.0.1` | The address the process binds |
 | `MCP_PORT` | `8001` | |
 | `MCP_PATH` | `/mcp/` | Where the streamable-HTTP transport is mounted |
+| `MCP_PUBLIC_URL` | unset | The origin a *client* connects to |
 
-Each of the three can be overridden per run: `main.py mcp --port 9001`. They do
-**not** fall back to the `API_*` variables: this is a different server with a
-different credential, so a deployment that has set `API_HOST=0.0.0.0` for a
-reverse proxy has not exposed the MCP server, which is the desired outcome.
+Each of the first three can be overridden per run: `main.py mcp --port 9001`.
+
+**`MCP_PUBLIC_URL` is not `MCP_HOST`.** Sign-in redirects a browser to absolute
+URLs on this server, so a redirect naming the container's own address is a
+browser that cannot follow it. It is whatever tunnel or reverse proxy fronts the
+port, and it must be `https` — Claude and every other remote MCP connector refuse
+plain HTTP. Unset, the server falls back to its bind address, which is enough for
+a client on this machine and wrong for a published one, and `main.py mcp` says so
+on startup rather than letting a redirect go nowhere.
+
+These do **not** fall back to the `API_*` variables: this is a different server
+with a different credential, so a deployment that has set `API_HOST=0.0.0.0` for
+a reverse proxy has not exposed the MCP server, which is the desired outcome.
 
 `MCP_HOST` defaults to loopback rather than to `API_HOST` because an MCP client
-is normally another process on this machine. `tools/list` is not authenticated, so
-anything that can reach the port sees the whole tool set without presenting a key;
-loopback is what keeps that off the network.
+is normally another process on this machine. A token in an MCP client has to be
+a bearer credential in `Authorization` (see [../guides/mcp.md](../guides/mcp.md)),
+and every MCP client sends that header — so unlike the API, there is no
+unauthenticated request for loopback to be the only thing protecting.
 
 **Where things are written** — three directories beside the source, kept apart
 because they are wanted on different terms.

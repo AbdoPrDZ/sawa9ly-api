@@ -83,11 +83,38 @@ that existed before the column did is an `api` key and keeps working. Adding a
 column still needs the `ALTER TABLE` that `database.md` describes; `create_all`
 will not do it.
 
-Where a key is issued, all three of which take the type: `POST /api/keys` (self),
+Where a key is issued, all of which take the type: `POST /api/keys` (self),
 `POST /api/admin/users/{id}/api-keys` (super, for another user), the dashboard's
 issue form, and `apikey create --type`. `ApiKey.create` rejects an unknown type
 rather than storing one nothing accepts, and the controllers turn that into a 400
 because the value came off the wire.
+
+## The third credential is a sign-in, not a key
+
+The MCP server accepts **an OAuth sign-in** as well as an `mcp` key, and the two
+are not a third entry in this table: they differ in kind. A key is looked up in a
+row; a sign-in is verified from a signature.
+
+- **A person signs in with their dashboard password.** The MCP server is its own
+  OAuth authorization server — see `mcp.md` — and `User.check_password` is what
+  decides. So there is no third-party identity provider and no mapping somebody
+  else's subject onto a sawa9ly account: signing in *is* the lookup. The
+  credential that results is as strong as the dashboard's, and reaches exactly
+  what that user reaches.
+- **Its tokens are signed and stateless**, in the same shape as this page's
+  `Token` but with a different issuer, and that difference is load-bearing: one
+  verifier must never accept the other's tokens, and a shared issuer is how that
+  happens by accident.
+- **They cannot be revoked individually.** An hour's life, or rotate the signing
+  secret for everybody. Same trade the dashboard's twelve-hour tokens already
+  make, and for the same reason — a per-token table would be a second answer to
+  "who is signed in", and this project has one.
+- **The user is re-read on every request**, so an account deleted mid-session
+  loses access at once rather than at expiry, exactly as `get_token_user` does.
+- **`tools/list` is no longer open.** With auth on the whole endpoint, anything
+  that can reach the port can still read the two discovery documents — which name
+  the server's endpoints — so loopback is still the right default, but for a
+  smaller thing than it was.
 
 ## Per-user sessions
 

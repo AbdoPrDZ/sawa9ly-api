@@ -136,13 +136,14 @@ services:
       # deliberate act rather than a default someone inherits.
       - "${MCP_PUBLISHED_HOST:-127.0.0.1}:${MCP_PUBLISHED_PORT:-8001}:${MCP_PORT:-8001}"
     # The image's check asks for /docs, which this container does not serve, so
-    # the test is replaced rather than disabled. The MCP mount answers a GET with
-    # 406 Not Acceptable - the transport only accepts a POST with a JSON-RPC body -
-    # and that 406 is the healthy answer. It separates the three failures a bare
-    # socket check would call all the same: a refused connection is the server
-    # being down, and a 404 is MCP_PATH being wrong.
+    # the test is replaced rather than disabled. A plain GET on the MCP mount is
+    # refused with 401 and a WWW-Authenticate challenge, because the endpoint
+    # demands a bearer token; that 401 is the healthy answer. It separates the
+    # three failures a bare socket check would call the same: a refused connection
+    # is the server being down, and a 404 is MCP_PATH being wrong. 406 is accepted
+    # alongside it for the same endpoint reached without the Accept header.
     healthcheck:
-      test: ["CMD", "python", "-c", "import http.client,os,sys;c=http.client.HTTPConnection('127.0.0.1',int(os.getenv('MCP_PORT','8001')),timeout=4);c.request('GET',os.getenv('MCP_PATH','/mcp/'));r=c.getresponse();sys.exit(0 if r.status==406 else 1)"]
+      test: ["CMD", "python", "-c", "import http.client,os,sys;c=http.client.HTTPConnection('127.0.0.1',int(os.getenv('MCP_PORT','8001')),timeout=4);c.request('GET',os.getenv('MCP_PATH','/mcp/'));r=c.getresponse();sys.exit(0 if r.status in (401,406) else 1)"]
       interval: 30s
       timeout: 5s
       start_period: 20s

@@ -77,6 +77,11 @@ default, overridable with `DATABASE_URL` for a server deployment.
   surface accepts it, and it carries a `server_default` of `api` as well as a
   Python default, so a row written before the column existed reads back as an
   `api` key rather than as `None`.
+- **`Secret`** — app-wide named secrets, generated once so they survive a
+  restart. Three live here: the dashboard's token signing key, the MCP access
+  token signing key, and the client secret the OAuth proxy presents to this
+  project as its upstream client. **`Secret.__repr__` deliberately does not render
+  the value** — a repr in a log or a traceback would leak it.
 - **`Product`** — the catalogue. Global, not per user: `product_id` holds the
   sawa9ly id and is unique. Images, figures and categories are stored as JSON
   text, because they are opaque lists of strings from the site and nothing

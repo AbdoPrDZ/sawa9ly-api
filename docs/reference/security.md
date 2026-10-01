@@ -7,7 +7,7 @@ Three things hold secrets. Treat all of them as passwords.
 | `.env` | your account email and password, in plain text | the account can be logged into, and the password tried elsewhere |
 | `database/sawa9ly.db` | session cookies and the sawa9ly password of every user | the account can be used until the session expires, with **no password needed** |
 | an API key | one user's full access to the API, or to the MCP server | that user can place orders, and read their saved data |
-| an MCP key | the same, but to the tool surface, and it ends up in an agent's transcripts | that user can place orders; a model can read the key it was given |
+| an MCP sign-in | the same, obtained by typing a dashboard password into the connector's sign-in page | that user can place orders; the token is held by the client |
 
 The session cookie is `HttpOnly` and `Secure`, so scripts running on the site
 cannot read it — but it is a bearer credential: whoever holds the database can
@@ -30,6 +30,24 @@ a language model. See [../guides/mcp.md](../guides/mcp.md).
 
 What that key can still reach is the same user's own data: two clients never share
 a cart, and no tool reaches another user's orders, recipients or pages.
+
+## Signing in to the MCP server
+
+A connector can sign in instead of holding a key, and the flow is this project's
+own — there is no third-party identity provider. A browser lands on
+`/oauth/authorize`, types the **dashboard** username and password, and gets a
+signed access token.
+
+- **The password is never stored or logged for this.** It goes to
+  `User.check_password`, exactly as it does on the dashboard's own sign-in, and
+  the response is `no-store` with a `Content-Security-Policy: sandbox`.
+- **A wrong password says nothing about which half was wrong**, so the endpoint is
+  not a way to enumerate accounts.
+- **The token is signed, not stored.** Access tokens last an hour and cannot be
+  revoked individually — only by rotating the `mcp_token` row in `app_secrets`,
+  which signs everybody out at once. Same trade as the dashboard's session tokens.
+- **An account deleted mid-flow loses access immediately**, not at token expiry:
+  the user is re-read from the database on every request.
 
 A **dashboard password** is stored as a scrypt hash with a per-user salt, and is
 verified in constant time. It is unrelated to the sawa9ly password: one signs in

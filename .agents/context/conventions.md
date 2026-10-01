@@ -25,8 +25,19 @@ deviation or "fix" it by accident.
   tool's public name, because FastMCP keys its registry by name and two `read`
   methods in different resources would be one tool. The docstring is the tool
   description, so it says what the tool is *for* — see `mcp.md`.
+- **MCP credentials** are `TokenVerifier`s on the server's `MultiAuth`, one class
+  per credential: `verifier.McpTokens` for a signed access token,
+  `api_keys.McpApiKeys` for an API key. `auth.McpAuth` sits above both and turns
+  an `AccessToken` into a `User`, re-reading it from the database rather than
+  trusting the claim. The OAuth server itself is `authorization.py` plus
+  `handlers.py` — the tokens and the markup in one, the request handling in the
+  other, because "what a valid request looks like" is a different question from
+  "what does one issue".
 - **Auth utilities** (`src/utils/`) are split by concern: `passwords.py` holds
   `Passwords`, `tokens.py` holds `Token`. They have no dependency on each other.
+  The MCP tokens in `src/mcp/authorization.py` are deliberately *not* in
+  `tokens.py`: a different issuer, a different payload and a different lifetime,
+  and one verifier must never accept the other's tokens.
 - **Domain services** (`src/services/`) are split by what they know, not by
   feature area: `tracking.py` knows about products and diffs, `cron.py` knows
   about timing and locking and calls the former through a job registry. A

@@ -6,7 +6,7 @@ Three front ends, one service layer, one HTTP client, one database.
 
 ```text
 cli/*.py    src/controllers/*.py    src/mcp/*.py    ← entry points
-  argparse    FastAPI                 FastMCP
+  argparse    FastAPI                 FastMCP + its own OAuth AS
       \            |                     /
        \           |                    /              all call the same services
         \          |                   /
@@ -31,9 +31,11 @@ leaf-level and used from both services and controllers.
 
 Two consequences of the entry points being peers rather than layers: one belongs to
 everybody (a described shape, or a shared cache) and cannot sit in any one of them
-without the other two importing sideways. `ClientCache` in `src/utils` and
-`LandingPageService.describe` are those two cases; both were single-purpose
-helpers in one front end until a second one needed them.
+without the other two importing sideways. `ClientCache` in `src/utils`,
+`LandingPageService.describe`, and the palette in `src/theme.py` are those cases;
+each was a helper in one front end until a second one needed it. `src/theme.py`
+exists for a sharper reason — the two pages that use it are in processes that
+cannot import each other, one because `import src.server` runs `create_app()`.
 
 ## Three entry points, one behaviour
 
@@ -63,6 +65,9 @@ service, never in an entry point.
   `ClientCache`, because building one may perform a login and that is not
   something to repeat per call. A CLI run is one short-lived process and does not
   need the cache.
+- The MCP server reaches the cache the same way it reaches the credential: from a
+  bearer token, re-read against the database. It has no `--user` and no default
+  account, because one process serves every client that connects to it.
 
 Two consequences that are easy to get wrong:
 

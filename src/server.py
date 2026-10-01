@@ -23,6 +23,7 @@ from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 
 from src.config import Config
+from src import theme
 from src.controllers import (
   AdminKeysController,
   AdminOrdersController,
@@ -75,17 +76,12 @@ PROJECT_ROOT = Config.PROJECT_ROOT
 DASHBOARD_DIST = PROJECT_ROOT / "dashboard" / "dist"
 DASHBOARD_INDEX = DASHBOARD_DIST / "index.html"
 
-#: The dashboard's dark palette, named here so this placeholder page and the
-#: stylesheet it points at cannot drift apart. These are the same four values as
-#: the `:root` block in `dashboard/src/styles.css`; the page below is a hand-written
-#: f-string with no stylesheet to inherit from, so the numbers have to exist on
-#: both sides. Changing the palette means changing them here too.
-DASHBOARD_CANVAS = "#0b0d10"
-DASHBOARD_INK = "#e9ecf1"
-DASHBOARD_MUTED = "#8b95a4"
-#: The brand amber. Filled surfaces use the `solid` variant; this is the one
-#: read as text, on the near-black canvas.
-DASHBOARD_ACCENT = "#ffc107"
+#: The palette, in `src/theme.py` — the sign-in page on the MCP side needs the
+#: same four values and cannot import them from here without running create_app.
+DASHBOARD_CANVAS = theme.CANVAS
+DASHBOARD_INK = theme.INK
+DASHBOARD_MUTED = theme.MUTED
+DASHBOARD_ACCENT = theme.ACCENT
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
