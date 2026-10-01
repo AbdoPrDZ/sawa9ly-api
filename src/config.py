@@ -211,6 +211,47 @@ class Config:
   def reload(cls):
     return cls.as_bool(cls.RELOAD_VAR, False)
 
+  # --- mcp server -----------------------------------------------------
+
+  MCP_HOST_VAR = "MCP_HOST"
+  MCP_PORT_VAR = "MCP_PORT"
+  MCP_PATH_VAR = "MCP_PATH"
+
+  MCP_DEFAULT_HOST = "127.0.0.1"
+  MCP_DEFAULT_PORT = 8001
+  MCP_DEFAULT_PATH = "/mcp/"
+
+  """A server of its own, on a port of its own.
+
+    Deliberately not the API's host and port, and not mounted under /api. The MCP
+    server authenticates with a different kind of key, so it is a separate
+    process answering on a separate port: binding it beside the API would mean
+    one restart takes both down, and putting it under /api would put a second
+    credential on a path that is already public contract.
+
+    `127.0.0.1` because an MCP client is normally another process on the same
+    machine — a desktop agent, an IDE — and a tool surface that can place orders
+    has no business listening on every interface by default."""
+
+  @classmethod
+  def mcp_host(cls):
+    return os.getenv(cls.MCP_HOST_VAR) or cls.MCP_DEFAULT_HOST
+
+  @classmethod
+  def mcp_port(cls):
+    return cls.as_int(cls.MCP_PORT_VAR, cls.MCP_DEFAULT_PORT)
+
+  @classmethod
+  def mcp_path(cls):
+    """The path the streamable-HTTP transport is mounted at.
+
+    A path rather than a bare port, because MCP over HTTP is a single
+    streamable endpoint and a client needs to be told where it is. The trailing
+    slash is not cosmetic: the mount is a prefix, and `/mcp` without one answers
+    a redirect that some clients will not follow.
+    """
+    return os.getenv(cls.MCP_PATH_VAR) or cls.MCP_DEFAULT_PATH
+
   # --- logging --------------------------------------------------------
 
   LOG_LEVEL_VAR = "LOG_LEVEL"

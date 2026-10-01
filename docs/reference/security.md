@@ -6,7 +6,8 @@ Three things hold secrets. Treat all of them as passwords.
 | --- | --- | --- |
 | `.env` | your account email and password, in plain text | the account can be logged into, and the password tried elsewhere |
 | `database/sawa9ly.db` | session cookies and the sawa9ly password of every user | the account can be used until the session expires, with **no password needed** |
-| an API key | one user's full access to the API | that user can place orders, and read their saved data |
+| an API key | one user's full access to the API, or to the MCP server | that user can place orders, and read their saved data |
+| an MCP key | the same, but to the tool surface, and it ends up in an agent's transcripts | that user can place orders; a model can read the key it was given |
 
 The session cookie is `HttpOnly` and `Secure`, so scripts running on the site
 cannot read it — but it is a bearer credential: whoever holds the database can
@@ -17,6 +18,18 @@ be logged in as you.
 An **API key** is stored as a SHA-256 hash. The plaintext is printed only in the
 response that creates it, so it cannot be recovered later — if you lose it,
 create another and revoke the lost one.
+
+A key is also one of two kinds, and that is a security boundary rather than a
+label. `api` is accepted by `/api`; `mcp` is accepted by the MCP server, and
+**neither accepts the other's key**. They are separate because an `mcp` key is
+typed into an AI agent's client configuration, which means it lands in
+transcripts, tool arguments and whatever context window the model is given, and it
+cannot be scoped down per-call the way a shell variable can. One key accepted by
+both surfaces would put `/api/admin` behind a token that is by construction read by
+a language model. See [../guides/mcp.md](../guides/mcp.md).
+
+What that key can still reach is the same user's own data: two clients never share
+a cart, and no tool reaches another user's orders, recipients or pages.
 
 A **dashboard password** is stored as a scrypt hash with a per-user salt, and is
 verified in constant time. It is unrelated to the sawa9ly password: one signs in

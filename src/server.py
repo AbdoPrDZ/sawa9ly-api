@@ -43,7 +43,7 @@ from src.controllers.dashboard_log import DashboardLogger
 from src.controllers.dependencies import Dependencies
 from src.controllers.keys import ApiKeysController
 from src.models import Role, User
-from src.utils.livewire import Livewire, ensure_db
+from src.utils.livewire import ensure_db
 from src.version import VERSION
 
 API_TITLE = "sawa9ly client API"
@@ -88,17 +88,6 @@ DASHBOARD_MUTED = "#8b95a4"
 DASHBOARD_ACCENT = "#ffc107"
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-
-# Per-user Livewire clients, so each API key keeps its own session and cart.
-_clients: dict[str, Livewire] = {}
-
-
-def client_cache(username):
-  """The Livewire client for a user, created (and logged in) on first use."""
-  if username not in _clients:
-    _clients[username] = Livewire(username)
-
-  return _clients[username]
 
 
 def create_app():

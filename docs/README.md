@@ -16,6 +16,7 @@ docs/
 ├── guides/                    doing a thing
 │   ├── cli.md                 every command
 │   ├── http-api.md            calling the API: credentials, errors, workflows
+│   ├── mcp.md                 calling it from an AI agent: keys, tools, checkout
 │   ├── dashboard.md           the admin dashboard, and what each role can do
 │   ├── pages.md               landing pages, and publishing one
 │   ├── tracking.md            watched products, the queue, notifications
@@ -40,6 +41,7 @@ docs/
 | know what you can configure | [start/configuration.md](start/configuration.md) |
 | drive it from a terminal | [guides/cli.md](guides/cli.md) |
 | call it from your own code | [guides/http-api.md](guides/http-api.md) |
+| drive it from an AI agent | [guides/mcp.md](guides/mcp.md) |
 | find out what broke | [reference/logging.md](reference/logging.md) |
 | know what it cannot do | [reference/caveats.md](reference/caveats.md) |
 
@@ -60,7 +62,8 @@ rather than a section of the configuration page.
 **The CLI mirrors the API, and they are documented separately.**
 [guides/cli.md](guides/cli.md) and [guides/http-api.md](guides/http-api.md) cover
 the same operations from two directions, and a change to one is a change to the
-other. There is one list of routes, in [reference/routes.md](reference/routes.md),
+other. [guides/mcp.md](guides/mcp.md) is the third of the three, for an AI agent.
+There is one list of routes, in [reference/routes.md](reference/routes.md),
 so a route is never described in two places and contradicted in one of them.
 
 ## If you are an agent rather than a person

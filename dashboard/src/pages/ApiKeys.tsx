@@ -75,8 +75,8 @@ const [users, setUsers] = useState<AdminUser[]>([])
       // reader's own — the self-service route, which takes no user at all.
       const created =
         input.userId === null
-          ? await createMyKey(input.label, input.days)
-          : await createKey(input.userId, input.label, input.days)
+          ? await createMyKey(input.type, input.label, input.days)
+          : await createKey(input.userId, input.type, input.label, input.days)
 
 setIssuing(false)
       list.setError('')
@@ -149,6 +149,7 @@ setIssuing(false)
           <thead>
             <tr>
               <th>{t('keys.col.prefix')}</th>
+              <th>{t('keys.col.type')}</th>
               <th>{t('keys.col.label')}</th>
               {seesEveryone ? <th>{t('keys.col.user')}</th> : null}
               <th>{t('keys.col.state')}</th>
@@ -163,6 +164,7 @@ setIssuing(false)
                 <td>
                   <code className="bg-transparent p-0 text-xs">{key.prefix}…</code>
                 </td>
+                <td className="font-mono text-xs uppercase">{t(`key.type.${key.type}`)}</td>
                 <td className="font-medium">{key.label ?? t('generic.unknown')}</td>
                 {seesEveryone ? <td>{key.username ?? `#${key.user_id}`}</td> : null}
                 <td>
@@ -184,7 +186,7 @@ setIssuing(false)
             ))}
 {shown.length === 0 ? (
               <tr>
-                <td colSpan={seesEveryone ? 7 : 6} className="py-10 text-center text-muted">
+                <td colSpan={seesEveryone ? 8 : 7} className="py-10 text-center text-muted">
                   {/* A page can be non-empty and still show nothing once the
                       usable filter is applied, so the three cases are named
                       separately rather than collapsed into one message. */}

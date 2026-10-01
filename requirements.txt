@@ -6,6 +6,12 @@ fastapi
 uvicorn[standard]
 tabulate
 
+# The MCP server's own transport and tool registry, for `python main.py mcp`.
+# FastMCP not `mcp`: it is the layer that turns a Python callable into a tool with
+# an input schema derived from its signature, which is the whole of what this
+# project's tools need. It pulls uvicorn in, already a dependency above.
+fastmcp
+
 # PostgreSQL, for a deployment that is not SQLite in a file. `binary` bundles
 # libpq into the wheel, so the image needs no system postgres client library -
 # which is most of the reason the slim base image is usable.

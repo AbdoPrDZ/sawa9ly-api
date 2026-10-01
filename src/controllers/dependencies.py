@@ -4,7 +4,8 @@ from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.db import SessionLocal
-from src.models import ApiKey, Role, User
+from src.models import ApiKey, KeyType, Role, User
+from src.utils.client_cache import ClientCache
 from src.utils.tokens import Token
 from src.utils.livewire import ensure_db
 
@@ -36,13 +37,13 @@ class Dependencies:
     """Resolve the caller's user from an API key.
 
     Accepts the key via `X-API-Key` or a `Bearer` authorization header.
-    """
-    token = x_api_key
 
-    if not token and authorization:
-      scheme, _, value = authorization.partition(" ")
-      if scheme.lower() == "bearer" and value:
-        token = value.strip()
+    Only a key of type `api` is looked up, so an `mcp` key is refused here as an
+    unknown key. That is the whole point of the type: an MCP key is configured in
+    an AI agent, and an agent that could also reach `/api/admin` would make every
+    prompt it reads a way to administer the installation.
+    """
+    token = Dependencies._token(x_api_key, authorization)
 
     if not token:
       raise HTTPException(
@@ -51,7 +52,7 @@ class Dependencies:
         headers={"WWW-Authenticate": "Bearer"},
       )
 
-    key = ApiKey.find(db, token)
+    key = ApiKey.find(db, token, KeyType.API)
 
     if key is None:
       raise HTTPException(
@@ -78,9 +79,7 @@ class Dependencies:
     One is cached per user for the life of the process, because building one
     may log in — and each caller keeps their own sawa9ly session and cart.
     """
-    from src.server import client_cache
-
-    return client_cache(user.username)
+    return ClientCache.get(user.username)
 
   @staticmethod
   def get_cart(client=Depends(get_client)):
@@ -109,6 +108,9 @@ class Dependencies:
     always carries one, and it then falls back to the API key — both travel in
     the same `Authorization: Bearer` header, so the value has to be tried as
     each before either can be ruled out.
+
+    The key it falls back to still has to be of type `api`, exactly as on the
+    routes that take nothing else.
 
     401 when neither is valid, and deliberately not 403: a bad key and an expired
     token both mean "sign in again".
@@ -214,6 +216,22 @@ class Dependencies:
       )
 
     return user
+
+  @staticmethod
+  def _token(x_api_key, authorization):
+    """The credential out of either header the API key may arrive in.
+
+    `X-API-Key` wins when both are present. They carry the same value in every
+    normal request, so the only case where they differ is a client that got the
+    headers backwards, and preferring the unambiguous one is better than
+    silently taking whichever came second.
+    """
+    if x_api_key:
+      return x_api_key
+
+    scheme, _, value = (authorization or "").partition(" ")
+
+    return value.strip() if scheme.lower() == "bearer" else None
 
   @staticmethod
   def _bearer(authorization):

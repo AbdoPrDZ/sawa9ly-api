@@ -19,6 +19,12 @@ deviation or "fix" it by accident.
   the class body. They translate HTTP to a service call and back, and hold no
   business logic. **One controller per resource**, so admin users and admin API
   keys are two controllers even though both live under `/api/admin`.
+- **MCP tools** (`src/mcp/`) are the same shape with a different envelope:
+  **one module per resource**, a class of `@staticmethod` tools, and a `tools()`
+  returning them. Every method name is unique across the package and is the
+  tool's public name, because FastMCP keys its registry by name and two `read`
+  methods in different resources would be one tool. The docstring is the tool
+  description, so it says what the tool is *for* — see `mcp.md`.
 - **Auth utilities** (`src/utils/`) are split by concern: `passwords.py` holds
   `Passwords`, `tokens.py` holds `Token`. They have no dependency on each other.
 - **Domain services** (`src/services/`) are split by what they know, not by
@@ -32,7 +38,8 @@ deviation or "fix" it by accident.
   importing `src.server` runs `create_app()`, so a module-level import would make
   every command need a database. `cli/router.py` is the example.
 - **Request plumbing** hangs off `Dependencies`, so a controller's signature
-  documents its own requirements.
+  documents its own requirements. The MCP equivalent is `McpAuth`, which hangs the
+  same three things off one namespace: `user()`, `client()` and `cart()`.
 
 ## Adding a feature, in order
 
@@ -42,10 +49,14 @@ deviation or "fix" it by accident.
    `App.GROUPS` **and** `_handles`.
 4. API route → the owning controller, plus a schema in `src/schemas.py`, plus a
    router include in `create_app` if it is a new controller.
-5. Tests are manual: exercise the CLI, then the route.
+5. MCP tool → the owning module in `src/mcp/`, plus an entry in
+   `TOOL_GROUPS` if it is a new resource — and a decision about whether to switch
+   it on, which is separate from whether it works. A docstring, not a summary: it
+   is the tool's description.
+6. Tests are manual: exercise the CLI, then the route, then the tool.
 
-The failure mode to avoid is step 3 or 4 alone. Both front ends are supposed to
-expose the same operations.
+The failure mode to avoid is step 3 or 4 alone. All three front ends are supposed
+to expose the same operations.
 
 ## Environment variables
 
@@ -85,9 +96,11 @@ modules still have module-level functions, and they predate the rule:
   `load_session`, `save_session`, `cookie_string` and private helpers. The
   `Livewire` class itself is the important part; these support it.
 - `src/utils/__init__.py` — `parse_cookie`, plus `BASE_URL` and `COOKIE_DOMAIN`.
-- `src/server.py` — `client_cache`, `create_app` and `_mount_dashboard`.
-  `create_app` is a conventional app factory; the server module is the one place
-  that composes the application.
+- `src/server.py` — `create_app` and `_mount_dashboard`. `create_app` is a
+  conventional app factory; the server module is the one place that composes the
+  application. (It also used to hold `client_cache`, which moved to
+  `src/utils/client_cache.py` when the MCP server needed the same cache and
+  importing `src.server` to reach it would have run `create_app`.)
 - `src/services/cart.py` — module-level private helpers (`_item_ids`,
   `_present_quantities`, `_as_int_map`, `_validate`, `_checkout_result`).
 

@@ -1,6 +1,6 @@
 """CLI: users and API keys."""
 
-from src.models import Role
+from src.models import KeyType, Role
 
 
 class AccountCli:
@@ -41,6 +41,10 @@ class AccountCli:
 
     create = key_actions.add_parser('create', help="create a key for a user")
     create.add_argument('--user', help="the account the key is for; defaults to the super admin")
+    create.add_argument('--type', dest='key_type', default=KeyType.API,
+                        choices=list(KeyType.ALL),
+                        help="which surface the key is accepted by: 'api' for the "
+                             "HTTP API, 'mcp' for the MCP server")
     create.add_argument('--label', default=None)
     create.add_argument('--expires-in-days', type=int, default=None)
 
@@ -61,11 +65,13 @@ class AccountCli:
         if args.action == 'create':
           user = Cli.user(db, args.user)
           key, plaintext = ApiKey.create(
-            db, user.id, label=args.label, expires_in_days=args.expires_in_days
+            db, user.id, label=args.label, expires_in_days=args.expires_in_days,
+            key_type=args.key_type,
           )
           return {
             'key': plaintext,
             'prefix': key.prefix,
+            'type': key.type,
             'user': user.username,
             'note': 'Store this now; only its hash is kept.',
           }
@@ -77,6 +83,7 @@ class AccountCli:
             'keys': [
               {
                 'prefix': key.prefix,
+                'type': key.type,
                 'label': key.label,
                 'revoked': key.revoked,
                 'created_at': str(key.created_at),

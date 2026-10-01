@@ -30,6 +30,7 @@ this file; only a change in organisation does.
 | `conventions.md` | Patterns a new file must follow, and where the current code knowingly departs from them. |
 | `database.md` | Engine setup, entity relationships, the rebuild-not-migrate policy, how sessions are persisted. |
 | `api.md` | The HTTP surface's shape and rules: the two credential systems, the CLI-mirroring rule, response contracts. |
+| `mcp.md` | The MCP server: why it is its own process and its own key type, how a tool differs from a route, the one deliberate divergence from the API. |
 | `workflows.md` | Multi-step flows that cross layers: session bootstrap, cart mutation, checkout, order lifecycle. Points at domains for the rules. |
 | `dashboard.md` | The admin dashboard: the Vite project in `dashboard/`, the build, how it is served, and the conventions its code follows. |
 | `tracking.md` | Product change tracking and the cron queue: subscriptions, deduplication, the change log, scheduling and locking. |
@@ -69,8 +70,8 @@ file when it would merely duplicate one.
 - **minimal** — `README.md`, `config.md`, `structure.md`, `architecture.md`.
   Enough to know what the project is and where things live.
 - **standard** — minimal plus `conventions.md`, `database.md`, `api.md`,
-  `workflows.md`, `dashboard.md`, `tracking.md`, `domains/`. *This is the current
-  level: exactly these files exist, no more.*
+  `workflows.md`, `dashboard.md`, `tracking.md`, `mcp.md`, `domains/`.
+  *This is the current level: exactly these files exist, no more.*
 - **detailed** — standard plus `decisions.md`, `infrastructure.md`, and deeper
   per-domain files only where a domain genuinely has more to say.
 

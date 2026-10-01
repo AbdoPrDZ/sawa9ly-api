@@ -92,22 +92,25 @@ RUN mkdir -p /var/lib/sawa9ly /var/log/sawa9ly /tmp/sawa9ly \
 
 USER sawa9ly
 
-EXPOSE 8000
+# 8000 is the API and the dashboard; 8001 is the MCP server. Both are published to
+# the host's own loopback by the compose files, and nothing wider.
+EXPOSE 8000 8001
 
-# Only meaningful for the default command below, which serves HTTP. The bot and
-# the queue do not, so compose turns this off for them rather than leaving three
-# containers permanently unhealthy. It asks for /docs because that is the one
-# route that is always present and never authenticated; a `/health` route was not
-# added for the sake of a container check.
+# Only meaningful for the default command below, which serves the API on /docs.
+# The bot and the queue serve nothing and compose turns this off for them, rather
+# than leaving containers permanently unhealthy. The MCP server does serve HTTP but
+# not /docs, so compose replaces the test instead - see the note there, which is
+# why this stays a `/docs` probe and not a generic "is the port open" one.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('API_PORT', '8000') + '/docs', timeout=4)"]
 
-# The API and the dashboard. One image, three processes: the bot and the queue
-# override this, and they are the same image and the same code precisely so that
-# there is one thing to build, tag and roll back.
+# The API, the dashboard, and the MCP server. One image, four processes: the bot
+# and the queue override this too, and they are the same image and the same code
+# precisely so that there is one thing to build, tag and roll back.
 #
-# The tag says `api` and the image also runs the bot and the queue. That is the
-# name the deployment and any registry use, so it is the name here too; the
-# default command is the API because it is the one with a port and a health check
-# and is the only one that makes sense to run bare.
+# The tag says `api` and the image also runs the bot, the queue and the MCP
+# server. That is the name the deployment and any registry use, so it is the name
+# here too; the default command is the API because it is the one with the
+# dashboard and the health check above and is the only one that makes sense to run
+# bare.
 CMD ["python", "main.py", "serve"]

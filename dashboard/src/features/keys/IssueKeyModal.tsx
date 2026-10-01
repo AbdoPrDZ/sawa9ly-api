@@ -1,9 +1,15 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import type { AdminUser } from '../../api/types'
+import type { AdminUser, KeyType } from '../../api/types'
 import { Field } from '../../components/Field'
 import { Modal } from '../../components/Modal'
 import { useI18n } from '../../i18n/useI18n'
+
+/** The two surfaces a key can be accepted by, in the order the picker offers
+ * them. `api` first because it is the commoner of the two: most keys here exist
+ * for a script.
+ */
+const KEY_TYPES: KeyType[] = ['api', 'mcp']
 
 /** What the form collects.
  *
@@ -15,11 +21,12 @@ import { useI18n } from '../../i18n/useI18n'
  */
 export interface IssueKeyInput {
   userId: number | null
+  type: KeyType
   label: string
   days?: number
 }
 
-/** Issues a key. Label and expiry are optional.
+/** Issues a key. Type, label and expiry are optional apart from the type.
  *
  * The user picker is drawn only when `users` is non-empty. A `super` gets it and
  * can issue for anybody; everybody else is issued for themselves, and offering
@@ -36,6 +43,7 @@ export function IssueKeyModal({
 }) {
   const { t } = useI18n()
   const [userId, setUserId] = useState(users[0]?.id ?? 0)
+  const [type, setType] = useState<KeyType>('api')
   const [label, setLabel] = useState('')
   const [expires, setExpires] = useState('')
   const [busy, setBusy] = useState(false)
@@ -51,6 +59,7 @@ export function IssueKeyModal({
     try {
       await onSubmit({
         userId: picking ? userId : null,
+        type,
         label,
         // A zero or blank box means "no expiry" rather than expiring today.
         days: expires && days > 0 ? days : undefined,
@@ -77,6 +86,16 @@ export function IssueKeyModal({
             </select>
           </Field>
         ) : null}
+
+        <Field label={t('key.fieldType')} hint={t('key.fieldTypeHint')}>
+          <select value={type} onChange={(event) => setType(event.target.value as KeyType)}>
+            {KEY_TYPES.map((option) => (
+              <option key={option} value={option}>
+                {t(`key.type.${option}`)}
+              </option>
+            ))}
+          </select>
+        </Field>
 
         <Field label={t('key.fieldLabel')} hint={t('key.fieldLabelHint')}>
           <input value={label} onChange={(event) => setLabel(event.target.value)} />

@@ -13,11 +13,43 @@ PREFIX_LENGTH = 8
 KEY_PREFIX = "sk_"
 
 
+class KeyType:
+  """Which door one key opens.
+
+  A key is accepted by exactly one surface. `api` is what the HTTP API under
+  `/api` takes; `mcp` is what the MCP server takes. Same column, same hash, same
+  revocation — but never both.
+
+  They are separate credentials because they are handed to different things. An
+  API key is typed into a script by its owner. An `mcp` key is typed into an AI
+  agent's client configuration, which means it ends up in transcripts, tool
+  arguments and whatever context window the model is given, and it cannot be
+  scoped down per-call the way a shell variable can. Making one key open both
+  surfaces would put `/api/admin` behind a token that is by construction read by
+  a language model.
+  """
+
+  API = "api"
+  MCP = "mcp"
+
+  ALL = (API, MCP)
+  DEFAULT = API
+
+  @staticmethod
+  def is_valid(key_type):
+    return key_type in KeyType.ALL
+
+
 class ApiKey(Base):
   """A hashed API key belonging to a user.
 
   Only the SHA-256 hash is stored, so a database leak cannot be replayed as a
   key; the plaintext is shown once at creation.
+
+  `type` is a `server_default` as well as a Python default, so a row written by
+  any means — including one created before the column existed and backfilled —
+  reads back as a key for the HTTP API, which is what every key was until the
+  MCP server arrived.
   """
 
   __tablename__ = "api_keys"
@@ -26,6 +58,9 @@ class ApiKey(Base):
   user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
   key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
   prefix: Mapped[str] = mapped_column(String(PREFIX_LENGTH), index=True)
+  type: Mapped[str] = mapped_column(
+    String(16), default=KeyType.DEFAULT, server_default=KeyType.DEFAULT, index=True,
+  )
   label: Mapped[str | None] = mapped_column(String(64), default=None)
   created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
   last_used_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
@@ -51,14 +86,27 @@ class ApiKey(Base):
     return plaintext[:PREFIX_LENGTH]
 
   @classmethod
-  def create(cls, db, user_id, label=None, expires_in_days=None):
-    """Create a key for a user and return (entity, plaintext)."""
+  def create(cls, db, user_id, label=None, expires_in_days=None,
+              key_type=KeyType.DEFAULT):
+    """Create a key for a user and return (entity, plaintext).
+
+    `key_type` names the one surface the key will be accepted by. It is
+    validated rather than defaulted silently, because the alternative — a key
+    stored with a type nothing accepts — is a credential that appears to work and
+    then 401s everywhere.
+    """
+    if not KeyType.is_valid(key_type):
+      raise ValueError(
+        f"Unknown key type '{key_type}'; expected one of {', '.join(KeyType.ALL)}"
+      )
+
     plaintext, hashed = cls.generate()
 
     key = cls(
       user_id=user_id,
       key_hash=hashed,
       prefix=cls.prefix_of(plaintext),
+      type=key_type,
       label=label,
       expires_at=(utcnow() + timedelta(days=expires_in_days)) if expires_in_days else None,
     )
@@ -68,11 +116,20 @@ class ApiKey(Base):
     return key, plaintext
 
   @classmethod
-  def find(cls, db, plaintext):
-    """Look up a key by its plaintext, or None."""
-    return db.execute(
-      select(cls).where(cls.key_hash == cls.hash(plaintext))
-    ).scalar_one_or_none()
+  def find(cls, db, plaintext, key_type=None):
+    """Look up a key by its plaintext, or None.
+
+    `key_type` narrows the lookup to one surface, and is how a caller refuses a
+    key belonging to the other one. It is a `where` clause rather than a check
+    afterwards so that a key of the wrong type is simply not found: the answer is
+    "unknown key", which does not confirm that the key exists on the other door.
+    """
+    query = select(cls).where(cls.key_hash == cls.hash(plaintext))
+
+    if key_type is not None:
+      query = query.where(cls.type == key_type)
+
+    return db.execute(query).scalar_one_or_none()
 
   @classmethod
   def all(cls, db, user_id=None, limit=None, offset=None, search=None):
@@ -139,4 +196,4 @@ class ApiKey(Base):
     self.last_used_at = utcnow()
 
   def __repr__(self):
-    return f"<ApiKey {self.prefix}… user={self.user_id}>"
+    return f"<ApiKey {self.prefix}… type={self.type} user={self.user_id}>"

@@ -33,6 +33,23 @@ class LandingPageService:
       )
     return LandingPage.all(db, user_id, product_id, state)
 
+  @staticmethod
+  def describe(page):
+    """One page as a dict, with the sawa9ly product it is about joined in.
+
+    Kept here so every front end renders a page the same way, rather than each
+    resolving `page.product` itself. The joined fields are the reason: a page's
+    own `product_id` is our internal key, which a caller cannot act on, so a
+    shape without the sawa9ly id next to it invites someone to use the wrong one.
+    """
+    product = page.product
+
+    return {
+      **page.as_dict(),
+      "sawa9ly_product_id": product.product_id if product else None,
+      "product_title": product.title if product else None,
+    }
+
   # --- writing --------------------------------------------------------
 
   @staticmethod

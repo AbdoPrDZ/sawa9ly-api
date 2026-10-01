@@ -15,6 +15,10 @@
 # each takes its own lock file and writes its own log. A queue that wedges should
 # not take the dashboard down with it.
 #
+# A fourth, `mcp`, joins them in both stacks: it serves HTTP, so it is a service
+# like `serve` rather than another background process, and it is the one you can
+# leave off entirely. Nothing else in the stack talks to it.
+#
 # This is a file rather than a compose `profile`, and that is not a preference.
 # A profile cannot give one service two different environments, which is exactly
 # the difference between here and the postgres file: `serve` under sqlite and
@@ -31,7 +35,7 @@
 
 name: sawa9ly-sqlite
 
-# Everything the three processes have in common. The differences between them
+# Everything the four processes have in common. The differences between them
 # are a command and a published port, nothing else.
 x-app: &app
   build:
@@ -89,10 +93,17 @@ services:
     <<: *app
     command: ["python", "main.py", "serve"]
     ports:
-      # The host's loopback, not every interface. This is an admin surface with
-      # real API keys behind it; publishing it to the network is a decision
-      # someone should make deliberately, not a default someone inherits.
-      - "127.0.0.1:${API_PUBLISHED_PORT:-8000}:${API_PORT:-8000}"
+      # `API_PUBLISHED_HOST` is the address on the *host*, and it defaults to the
+      # host's own loopback: this is an admin surface with real API keys behind
+      # it, and reaching it from the network should be a deliberate act rather
+      # than a default someone inherits.
+      #
+      # It is a separate variable from `API_HOST` because the two answer different
+      # questions. `API_HOST` is what the process binds *inside* the container,
+      # where the loopback interface is the container's own and binding to it
+      # publishes nothing - that is why it is 0.0.0.0. `API_PUBLISHED_HOST` is
+      # what Docker exposes on the machine.
+      - "${API_PUBLISHED_HOST:-127.0.0.1}:${API_PUBLISHED_PORT:-8000}:${API_PORT:-8000}"
 
   telegram:
     <<: *app
@@ -107,6 +118,46 @@ services:
     command: ["python", "main.py", "cron", "listen"]
     healthcheck:
       disable: true
+
+  # The MCP server: this project's operations as tools, for an AI agent.
+  #
+  # Published to the host's loopback, like the API and for the same reason, with
+  # one thing said plainly: `tools/list` is NOT authenticated. Anything that can
+  # reach this port sees the whole tool set - every name and description - without
+  # presenting a key. Every tool *call* does need a key, and one of type `mcp`,
+  # but the catalogue of tools is visible. Loopback is therefore not politeness
+  # here, it is the only thing standing between the network and a list of tools
+  # that can place real orders.
+  #
+  # `MCP_PUBLISHED_HOST` is the one knob for that, and it is deliberately a
+  # separate variable from `MCP_HOST`: the container binds 0.0.0.0 because the
+  # loopback interface in there is its own, while the host side defaults to
+  # 127.0.0.1 because reaching this from another machine should be a deliberate
+  # act. Widening the published host without putting something in front of it that
+  # checks the key is the mistake this split makes hard to make by accident.
+  mcp:
+    <<: *app
+    command: ["python", "main.py", "mcp"]
+    ports:
+      - "${MCP_PUBLISHED_HOST:-127.0.0.1}:${MCP_PUBLISHED_PORT:-8001}:${MCP_PORT:-8001}"
+    # The image's check asks for /docs, which this container does not serve, so
+    # the test is replaced rather than disabled: this one is a real liveness
+    # probe, not a formality.
+    #
+    # The MCP mount answers a GET with **406 Not Acceptable** - the streamable-HTTP
+    # transport only accepts a POST with a JSON-RPC body. That 406 is the healthy
+    # answer, and it is a better probe than "the port is open": a refused
+    # connection means the server is down, and a 404 means MCP_PATH is wrong, so
+    # all three failures are distinguishable where a bare socket check would see
+    # them all as success. `http.client` rather than `urllib` because urllib
+    # raises on a 4xx, and inverting that exception is what keeps this to one
+    # line.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client,os,sys;c=http.client.HTTPConnection('127.0.0.1',int(os.getenv('MCP_PORT','8001')),timeout=4);c.request('GET',os.getenv('MCP_PATH','/mcp/'));r=c.getresponse();sys.exit(0 if r.status==406 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
 
 volumes:
   sawa9ly-database:

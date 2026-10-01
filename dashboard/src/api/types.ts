@@ -289,11 +289,22 @@ export interface NewUser extends UserEdits {
   username: string
 }
 
+/** Which surface a key is accepted by. A key opens exactly one: `api` for the
+ * HTTP API under /api, `mcp` for the MCP server. Never both — an mcp key lives
+ * in an AI agent's configuration, and one that could also reach /api/admin
+ * would make every prompt the agent reads a way to administer this install.
+ *
+ * Mirrors `KeyType` in `src/models/api_key.py`.
+ */
+export type KeyType = 'api' | 'mcp'
+
 export interface AdminApiKey {
   id: number
   user_id: number
   username: string | null
   prefix: string
+  /** Which surface this key is accepted by. Never accepted by both. */
+  type: KeyType
   label: string | null
   revoked: boolean
   usable: boolean

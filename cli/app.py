@@ -21,6 +21,7 @@ from cli.account import AccountCli
 from cli.catalogue import CatalogueCli
 from cli.client import ClientCli
 from cli.cron import CronCli
+from cli.mcp import McpCli
 from cli.order import OrderCli
 from cli.output import Output
 from cli.page import PageCli
@@ -76,6 +77,7 @@ class App:
     TelegramCli,
     RouterCli,
     ServeCli,
+    McpCli,
   )
 
   @staticmethod
@@ -129,6 +131,7 @@ class App:
       'TelegramCli': {'telegram'},
       'RouterCli': {'router'},
       'ServeCli': {'serve'},
+      'McpCli': {'mcp'},
     }
     return command in names.get(group.__name__, set())
 

@@ -49,6 +49,7 @@ test can change the environment and re-read.
 | --- | --- | --- |
 | Database | `DATABASE_URL`, or `SQLITE_FILE`; or `DB_DRIVER`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | SQLite at `database/sawa9ly.db` |
 | HTTP server | `API_HOST`, `API_PORT`, `API_RELOAD` | `127.0.0.1:8000`, reload off |
+| MCP server | `MCP_HOST`, `MCP_PORT`, `MCP_PATH` | `127.0.0.1:8001`, `/mcp/` |
 | Locations | `DATABASE_DIR`, `DATA_DIR`, `LOG_DIR`, `LOCK_DIR` | `database`, `data`, `logs`, and `DATA_DIR` for the locks |
 | Logging | `LOG_LEVEL`, `LOG_FILE`, `LOG_FORMAT` | `INFO`, five files, text |
 | Super admin | `SUPER_ADMIN_USERNAME`, `SUPER_ADMIN_PASSWORD` | none — both required |
@@ -65,6 +66,24 @@ API puts it in the URL of every call, so `requests` quotes it in error messages.
 `TELEGRAM_BOT_NAME` is a fallback only — the bot's real name is read from the token
 with `getMe`, so a link cannot name a bot the token does not belong to. See
 `domains/telegram.md`.
+
+## The MCP server's own three settings
+
+`MCP_HOST`/`MCP_PORT`/`MCP_PATH` are the API's three with different names, and the
+naming is the point: they are a different server on a different port with a
+different credential, so they do not fall back to `API_*`. A deployment that set
+`API_HOST=0.0.0.0` for a reverse proxy has **not** exposed the MCP server, and
+that is the desired outcome — the MCP surface can place orders.
+
+`MCP_PATH`'s trailing slash is load-bearing. The streamable-HTTP transport is
+mounted as a prefix, and a client pointed at `/mcp` without the slash gets a
+redirect rather than a session.
+
+`MCP_HOST` defaults to loopback rather than to `API_HOST`, because an MCP client
+is normally another process on the same machine. Setting it to `0.0.0.0` is
+allowed and is not warned about — it is a legitimate container deployment — but
+`tools/list` is unauthenticated, so anything that can reach the port sees the
+whole tool set. See `mcp.md`.
 
 ## The default user is the super admin
 
@@ -123,6 +142,19 @@ which leaves an absolute path alone and resolves a relative one against
 variables rather than compiling them in, so the same image run on a machine puts
 them back beside the source: database `/var/lib/sawa9ly`, logs `/var/log/sawa9ly`,
 locks `/tmp/sawa9ly`.
+
+**Four containers from one image:** `serve`, `telegram`, `cron`, `mcp` — the same
+command-to-service pattern as the first three, so the MCP server ships with the
+stack rather than being something a deployment has to remember to add. `mcp` is
+the only one of the four that can be left off entirely.
+
+The two published addresses are `API_PUBLISHED_HOST` and `MCP_PUBLISHED_HOST`,
+both defaulting to `127.0.0.1`. They are separate from `API_HOST`/`MCP_HOST`
+because the two answer different questions: the `*_HOST` pair is what the process
+binds *inside* the container, where the loopback interface is the container's own
+so it must be `0.0.0.0`, and the `*_PUBLISHED_HOST` pair is what Docker exposes on
+the machine. `*_PUBLISHED_PORT` sits beside the host pair and `*_PORT` beside the
+container pair, for the same reason.
 
 The locks move to `/tmp` on purpose. A lock file only means anything while the
 process holding it is alive, and `Cron._Lock` is an `O_EXCL` create rather than a

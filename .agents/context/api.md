@@ -76,6 +76,12 @@ Every route except `/api/health` requires an API key, presented as `X-API-Key` o
 `Authorization: Bearer <key>`. `Dependencies.get_current_user` resolves it and
 returns the `User`.
 
+**The key must be of type `api`.** `ApiKey.find` is given `KeyType.API`, so an
+`mcp` key arrives here as an unknown key — the same answer as a string that was
+never a key, which is what stops this route confirming that somebody else's
+credential exists. `get_any_user`'s key fallback is scoped the same way. See
+`domains/authentication.md` and `mcp.md`.
+
 Two things follow from "the key identifies the user", and both are load-bearing:
 
 1. **There is no user id in the request.** A route never takes a user; it uses
@@ -107,6 +113,11 @@ Adding a route means all of:
 2. a handler on the owning controller class,
 3. a body/response model in `src/schemas.py`,
 4. a router include in `create_app` — **only** if the controller is new.
+
+A machine-facing route wants a tool in `src/mcp/` too — see `mcp.md`, which also
+records that the tool set is currently a deliberate subset rather than the whole
+surface. Three things are never tools whatever the tuple says: the tracking pass,
+the Telegram poller, and the catalogue's unauthenticated scrape.
 
 **A missing include is silent, not a 404.** The dashboard shell is served from a
 catch-all `@app.get("/{path:path}")`, so a request for an API path that was never

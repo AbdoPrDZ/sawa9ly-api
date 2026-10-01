@@ -38,6 +38,25 @@ not reset the password.
 
 Each of the three can be overridden per run: `main.py serve --port 9000`.
 
+**MCP server** — a second server, on a port of its own, for AI agents. See
+[../guides/mcp.md](../guides/mcp.md).
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `MCP_HOST` | `127.0.0.1` | |
+| `MCP_PORT` | `8001` | |
+| `MCP_PATH` | `/mcp/` | Where the streamable-HTTP transport is mounted |
+
+Each of the three can be overridden per run: `main.py mcp --port 9001`. They do
+**not** fall back to the `API_*` variables: this is a different server with a
+different credential, so a deployment that has set `API_HOST=0.0.0.0` for a
+reverse proxy has not exposed the MCP server, which is the desired outcome.
+
+`MCP_HOST` defaults to loopback rather than to `API_HOST` because an MCP client
+is normally another process on this machine. `tools/list` is not authenticated, so
+anything that can reach the port sees the whole tool set without presenting a key;
+loopback is what keeps that off the network.
+
 **Where things are written** — three directories beside the source, kept apart
 because they are wanted on different terms.
 

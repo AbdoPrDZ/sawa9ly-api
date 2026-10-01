@@ -86,10 +86,9 @@ class PageController:
 
   @staticmethod
   def _out(page):
-    """One page, with the product it is about joined in for the listing."""
-    product = page.product
-    return {
-      **page.as_dict(),
-      "sawa9ly_product_id": product.product_id if product else None,
-      "product_title": product.title if product else None,
-    }
+    """One page, in the shape every front end returns.
+
+    The join itself is `LandingPageService.describe`, so the MCP tools and this
+    controller cannot drift apart on which product a page is about.
+    """
+    return LandingPageService.describe(page)

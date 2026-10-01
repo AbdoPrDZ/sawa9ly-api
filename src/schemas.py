@@ -390,16 +390,19 @@ class AdminApiKeyOut(BaseModel):
   user_id: int
   username: str
   prefix: str
+  type: str = "api"
+  """Which surface this key is accepted by: 'api' or 'mcp'."""
   label: str | None = None
   revoked: bool = False
   usable: bool = False
-  created_at: str | None = None
-  last_used_at: str | None = None
-  expires_at: str | None = None
+  created_at: object | None = None
+  last_used_at: object | None = None
+  expires_at: object | None = None
   key: str | None = Field(default=None, description="Only on creation")
 
 
 class AdminApiKeyCreateIn(BaseModel):
+  type: str = Field(default="api", description="'api' or 'mcp'")
   label: str | None = None
   expires_in_days: int | None = Field(default=None, ge=1)
 

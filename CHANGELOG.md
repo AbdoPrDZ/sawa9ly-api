@@ -11,6 +11,58 @@ file, so there is no second place to update.
 
 ## [Unreleased]
 
+### Added — an MCP server, and a second kind of API key
+
+- **An MCP server**, so an AI agent can drive the client with the same operations
+  a script uses. FastMCP, in `src/mcp/`, run by `python main.py mcp` — a third
+  front end beside the CLI and the HTTP API, over the same services. It is its
+  own process on its own port (`MCP_HOST`/`MCP_PORT`/`MCP_PATH`, default
+  `127.0.0.1:8001/mcp/`) rather than a route on the FastAPI app, because it holds
+  a different credential and one restart should not take both surfaces down.
+- **10 tools, covering three resources**: products, the saved catalogue, and
+  landing pages. A module per resource is written for all nine, and
+  `TOOL_GROUPS` in `src/mcp/server.py` is where a resource is switched on — the
+  rest are present but not registered yet, so **the MCP surface does not yet
+  mirror `/api/v1`**. Adding one is uncommenting its import and its tuple entry.
+  A route added without a tool remains unfinished work; a tool added without one
+  is not.
+  - What that means in practice: an agent can look at a product, keep a local
+    catalogue of what it saw, and write landing pages — but it cannot drive a
+    cart or place an order yet, so the irreversible half of the surface is
+    deliberately absent.
+- **A key is now one of two kinds.** `api_keys.type` is `api` or `mcp`, and a key
+  is accepted by exactly one of them: the HTTP API refuses an `mcp` key and the
+  MCP server refuses an `api` one. They are separate because they are handed to
+  different things — an API key is typed into a script by its owner, while an
+  `mcp` key is typed into an AI agent's client configuration and from there lands
+  in transcripts and tool arguments. One key accepted by both would put
+  `/api/admin` behind a token that is by construction read by a language model.
+  A key of the wrong type is reported as *unknown*, so a refused key cannot
+  confirm that somebody else's credential exists.
+  - Issue one with `apikey create --type mcp`, `POST /api/keys`, or the
+    dashboard's issue-key form, which gained an api/mcp picker.
+  - The column has a `server_default` of `api`, so every key that existed before
+    it is an `api` key and keeps working.
+- **An `mcp` service in both compose stacks**, on `127.0.0.1:8001`. Its health
+  check replaces the image's `/docs` probe rather than being disabled: it asserts
+  the MCP mount answers a `GET` with 406 Not Acceptable, which separates a server
+  that is down from an `MCP_PATH` that is wrong, where a socket check would call
+  both success.
+- **`API_PUBLISHED_HOST` and `MCP_PUBLISHED_HOST`**, each defaulting to
+  `127.0.0.1`, so the address Docker exposes on the machine is a setting rather
+  than a line of compose file someone has to edit. They are deliberately separate
+  from `API_HOST`/`MCP_HOST`, which are what the process binds inside the
+  container and must stay `0.0.0.0` — the loopback interface in there belongs to
+  the container.
+- **`LandingPageService.describe(page)`**, so the landing-page shape — the joined
+  sawa9ly id and title — has one home rather than one per front end. The
+  controller's `_out` now delegates to it.
+
+`tools/list` is **not** authenticated: anything that can reach the port sees every
+tool name and description without presenting a key. Every tool *call* needs one.
+This is why `MCP_HOST` defaults to loopback and the compose stack publishes it on
+the host's loopback only.
+
 ### Added — landing pages, order state, and the `/api` namespace
 
 - **Landing pages.** A user can write an HTML page per product and publish it at

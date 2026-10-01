@@ -10,6 +10,10 @@ Two independent credential systems, and confusing them is the main risk here.
 | Who holds it | the caller | the person, in a browser | the server |
 | Lifetime | until revoked or expired | token expires after 12h | until Laravel expires it |
 
+An API key is not one credential but two: `api_keys.type` decides whether it opens
+the HTTP API or the MCP server, and a key is accepted by exactly one of them. See
+**API keys** below, and `mcp.md` for the surface on the other side.
+
 A machine request presents an API key; that resolves a `User`; that user's stored
 sawa9ly session is then used for the site. A browser presents a password, gets a
  signed token, and uses that token on `/api/auth` and `/api/admin`. **Neither
@@ -57,6 +61,33 @@ everybody is signed out at the same moment with no error from the site. Set
 - Never log a key, include one in an error message, or echo one in a response
   after creation. `main.py login` printing a cookie is the single deliberate
   exception in the project, and it is a cookie rather than a key.
+
+### A key opens one door, not two
+
+`api_keys.type` is `api` or `mcp`, and it is checked in the **lookup**
+(`ApiKey.find(db, token, KeyType.API)`), not afterwards. That ordering is the
+whole point: a key of the wrong type must come back as *not found*, so refusing it
+cannot be used to confirm that somebody else's credential exists. A post-hoc
+`if key.type != ...` would answer the same 401 while quietly revealing the row
+exists.
+
+They are separate because they are handed to different things. An `api` key is
+typed into a script by its owner. An `mcp` key is typed into an AI agent's client
+configuration, which means it lands in transcripts, tool arguments and whatever
+context the model is given, and it cannot be scoped down per-call the way a shell
+variable can. One key accepted by both surfaces would put `/api/admin` behind a
+token that is by construction read by a language model.
+
+The column defaults to `api` in Python **and** as a `server_default`, so every key
+that existed before the column did is an `api` key and keeps working. Adding a
+column still needs the `ALTER TABLE` that `database.md` describes; `create_all`
+will not do it.
+
+Where a key is issued, all three of which take the type: `POST /api/keys` (self),
+`POST /api/admin/users/{id}/api-keys` (super, for another user), the dashboard's
+issue form, and `apikey create --type`. `ApiKey.create` rejects an unknown type
+rather than storing one nothing accepts, and the controllers turn that into a 400
+because the value came off the wire.
 
 ## Per-user sessions
 
@@ -233,3 +264,9 @@ Consequences worth respecting:
   discipline: hash at rest, return once, never log.
 - Never key anything off a user id that came from the request. The authenticated
   user is the only user.
+- A new **machine** credential on an existing table is a `KeyType` value, not a
+  new table. Check the type in the lookup, so a key of the wrong type is
+  indistinguishable from one that does not exist.
+- A new front end needs its own credential *unless* it is a second caller of the
+  same operations by the same people. The MCP server took a new type because it
+  hands its key to a language model; a read-only status page would not need one.

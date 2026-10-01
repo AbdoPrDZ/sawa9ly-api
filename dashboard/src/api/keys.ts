@@ -1,5 +1,5 @@
 import { listQuery, request } from './client'
-import type { AdminApiKey, ListQuery, PageResult } from './types'
+import type { AdminApiKey, KeyType, ListQuery, PageResult } from './types'
 
 /** The signed-in user's own keys. Every account may do this for itself. */
 
@@ -15,10 +15,11 @@ export function listMyKeys(query: ListQuery = {}) {
  * operation with a different argument: this has no user in it at all, so it
  * cannot be pointed at somebody else.
  */
-export function createMyKey(label?: string, expiresInDays?: number) {
+export function createMyKey(type: KeyType, label?: string, expiresInDays?: number) {
   return request<AdminApiKey>('/keys', {
     method: 'POST',
     body: JSON.stringify({
+      type,
       label: label || null,
       expires_in_days: expiresInDays ?? null,
     }),
@@ -36,10 +37,16 @@ export function listKeys(query: ListQuery = {}) {
 }
 
 /** Issue a key in another user's name. `super` only. */
-export function createKey(userId: number, label?: string, expiresInDays?: number) {
+export function createKey(
+  userId: number,
+  type: KeyType,
+  label?: string,
+  expiresInDays?: number,
+) {
   return request<AdminApiKey>(`/admin/users/${userId}/api-keys`, {
     method: 'POST',
     body: JSON.stringify({
+      type,
       label: label || null,
       expires_in_days: expiresInDays ?? null,
     }),

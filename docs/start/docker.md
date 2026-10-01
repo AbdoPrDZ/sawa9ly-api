@@ -37,11 +37,44 @@ reach a postgres it does not have.
 | Persistent volume | `sawa9ly-database` | `sawa9ly-postgres` |
 | Use it for | one machine, trying it out | anything you care about |
 
-Each stack runs three containers from the one image — `serve`, `telegram` and
-`cron` — differing only in their command. They are separate because they fail
+Each stack runs four containers from the one image — `serve`, `telegram`, `cron`
+and `mcp` — differing only in their command. They are separate because they fail
 separately and are restarted separately: a queue that wedges should not take the
-dashboard down with it. The port is published on the host's loopback only,
-because this is an admin surface with real API keys behind it.
+dashboard down with it. `mcp` is the one you can leave off entirely; nothing else
+in the stack talks to it.
+
+The two ports are published on the host's **loopback only**, because both are
+admin surfaces with real API keys behind them:
+
+| Container | Command | Published as | What is on it |
+| --- | --- | --- | --- |
+| `serve` | `main.py serve` | `127.0.0.1:8000` | the API and the dashboard |
+| `mcp` | `main.py mcp` | `127.0.0.1:8001` | the MCP tool surface |
+
+Both addresses come from `API_PUBLISHED_HOST` and `MCP_PUBLISHED_HOST`, each
+defaulting to `127.0.0.1`. They are deliberately separate from `API_HOST` and
+`MCP_HOST`, which are what the process binds *inside* the container and are
+therefore `0.0.0.0` — the loopback interface in there belongs to the container, so
+binding it publishes nothing and the port mapping silently goes nowhere. The
+published pair is what Docker exposes on the machine, and widening it is a
+deliberate act:
+
+```bash
+MCP_PUBLISHED_HOST=0.0.0.0     # in .env.docker
+```
+
+Do that for `mcp` only with something in front of it that checks the key.
+**`tools/list` is not authenticated** — anything that can reach the port sees every
+tool name and description without presenting one. Every tool *call* needs a key of
+type `mcp`, but the list of tools is open.
+
+The `mcp` container replaces the image's health check rather than disabling it.
+The image's check asks for `/docs`, which that container does not serve; the
+replacement asserts that the MCP mount answers a `GET` with **406 Not
+Acceptable**, which is what the streamable-HTTP transport returns for anything but
+a JSON-RPC `POST`. That 406 is the healthy answer, and it distinguishes three
+failures a bare socket check would call identical: a refused connection is the
+server being down, and a 404 is `MCP_PATH` being wrong.
 
 **Talking to a running container.** The CLI is installed in the image as
 `sawa9ly-api`, so a running container can be asked questions without a shell in it:

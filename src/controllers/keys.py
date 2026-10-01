@@ -52,11 +52,7 @@ class ApiKeysController:
     it cannot sign in to reach it. Those are API-only accounts, and a super
     issues their key from `/api/admin/users/{id}/api-keys`.
     """
-    key, plaintext = ApiKey.create(
-      db, user.id, label=body.label, expires_in_days=body.expires_in_days
-    )
-
-    return {**ApiKeysController._out(key, db), "key": plaintext}
+    return ApiKeysController._issue(db, user.id, body)
 
   @router.delete("/{key_id}")
   def revoke_key(key_id: int, user=Depends(Dependencies.require_user),
@@ -82,6 +78,29 @@ class ApiKeysController:
   # --- shaping --------------------------------------------------------
 
   @staticmethod
+  def _issue(db, user_id, body):
+    """Create a key for one user and shape it, plaintext included.
+
+    Lives here rather than on the admin controller because this is the keys
+    controller and both issuing routes are the same act against a different
+    `user_id` — the only difference between them is a permission, and a
+    permission is a `Depends`, not a second copy of the body handling. The
+    `ValueError` is the model's own "unknown key type", and it becomes a 400
+    rather than a 500 because the value came off the wire.
+    """
+    try:
+      key, plaintext = ApiKey.create(
+        db, user_id, label=body.label, expires_in_days=body.expires_in_days,
+        key_type=body.type,
+      )
+    except ValueError as error:
+      raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)
+      ) from error
+
+    return {**ApiKeysController._out(key, db), "key": plaintext}
+
+  @staticmethod
   def _out(key, db):
     """One key, with its owner's username joined in for the listing.
 
@@ -97,6 +116,7 @@ class ApiKeysController:
       "user_id": key.user_id,
       "username": user.username if user else None,
       "prefix": key.prefix,
+      "type": key.type,
       "label": key.label,
       "revoked": key.revoked,
       "usable": key.is_valid(),

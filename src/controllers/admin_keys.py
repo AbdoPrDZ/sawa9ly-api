@@ -57,11 +57,7 @@ class AdminKeysController:
         status_code=status.HTTP_404_NOT_FOUND, detail="No such user."
       )
 
-    key, plaintext = ApiKey.create(
-      db, user.id, label=body.label, expires_in_days=body.expires_in_days
-    )
-
-    return {**ApiKeysController._out(key, db), "key": plaintext}
+    return ApiKeysController._issue(db, user.id, body)
 
   @router.delete("/api-keys/{key_id}")
   def revoke_key(key_id: int, _admin=Depends(Dependencies.require_admin),

@@ -1,7 +1,7 @@
 """ORM entities."""
 
 from src.db import Base
-from src.models.api_key import ApiKey
+from src.models.api_key import ApiKey, KeyType
 from src.models.client import Client
 from src.models.landing_page import LandingPage, PageState
 from src.models.notification import Notification
@@ -20,6 +20,7 @@ __all__ = [
   "ApiKey",
   "Base",
   "Client",
+  "KeyType",
   "LandingPage",
   "Notification",
   "NotificationDelivery",
