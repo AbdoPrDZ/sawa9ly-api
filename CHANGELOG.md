@@ -517,6 +517,26 @@ the host's loopback only.
   against it** — there is no server here — so that half of the claim rests on the
   grammar rather than on an execution.
 
+### Added — `shipping seed`, for loading the reference data without a database client
+
+- The seed is plain SQL and loads with `sqlite3 … <` or `psql -f`, but **the
+  application image ships `psycopg[binary]` and no `psql`** — so on a VPS, inside
+  the container you are already in, there was nothing to run it with. It now goes
+  through the application's own engine and the configured `DATABASE_URL`, which
+  means `python main.py shipping seed` loads it on either engine and needs nothing
+  installed.
+- It executes the file **one statement at a time**, because the two drivers differ:
+  `sqlite3`'s `execute()` refuses more than one statement and psycopg's accepts
+  them, so statement-at-a-time is the only shape that behaves the same on both.
+  Splitting on `;` is safe for this file and was checked rather than assumed — with
+  the comments stripped, the quotes balance and all seven semicolons fall outside a
+  string. A name containing one would be split in half and loaded as nonsense,
+  which is the kind of corruption that looks like a successful run.
+- Reports the file it read and the resulting row counts, so the output is something
+  to check rather than "done". Verified against SQLite twice into the same
+  database: 58 and 1541 both times. **Postgres still has not been run against it**;
+  there is no server here.
+
 ## [1.3.0] - 2026-09-27
 
 ### Added

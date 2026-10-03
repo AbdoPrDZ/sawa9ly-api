@@ -71,6 +71,7 @@ python main.py checkout --user alice \
 | `shipping list [--available yes\|no]` | List saved delivery prices |
 | `shipping wilayas` | List the 58 wilayas |
 | `shipping communes [--wilaya-id <n>]` | List communes, or one wilaya's |
+| `shipping seed` | Load the wilaya and commune reference data |
 | `order create --user <u> [--client <id>]` | Start a draft order |
 | `order add <order> <product> [--quantity] [--price]` | Add a product to a draft |
 | `order remove <order> <product>` | Remove a product from a draft |

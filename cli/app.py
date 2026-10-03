@@ -38,6 +38,7 @@ from src.services import (
   CronError,
   OrderError,
   PageError,
+  SeedMissing,
   TrackingError,
 )
 from src.utils.livewire import LivewireError
@@ -59,12 +60,13 @@ logger = logging.getLogger(__name__)
 # sibling: "no chat is linked" and "that code is not one we issued" are answers,
 # not faults.
 #
-# ReferenceDataMissing is a setup step for the same reason: the delivery reference
-# data is seeded rather than scraped, so an unseeded database is a missing file
-# with a known command, not a fault.
+# ReferenceDataMissing and SeedMissing are setup steps for the same reason: the
+# delivery reference data is seeded rather than scraped, so an unseeded database
+# or a distribution without the file is a missing file with a known command, not
+# a fault.
 EXPECTED_ERRORS = (
   LivewireError, OrderError, PageError, TrackingError, CronError, AccountsError,
-  TelegramError, TelegramBindingError, ReferenceDataMissing,
+  TelegramError, TelegramBindingError, ReferenceDataMissing, SeedMissing,
 )
 
 

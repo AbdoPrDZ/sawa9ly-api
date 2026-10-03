@@ -9,6 +9,7 @@ from .order import OrderError, OrderService
 from .order_page import OrderPage, OrderPageError
 from .order_sync import OrderSync
 from .product import Product
+from .seed import Seed, SeedMissing
 from .shipping import Shipping
 from .telegram import TelegramService
 from .tracking import Tracking, TrackingError
@@ -29,6 +30,8 @@ __all__ = [
   "OrderSync",
   "PageError",
   "Product",
+  "Seed",
+  "SeedMissing",
   "Shipping",
   "TelegramService",
   "Tracking",

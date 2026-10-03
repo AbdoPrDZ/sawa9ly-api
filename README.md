@@ -59,29 +59,29 @@ python main.py serve
 
 The 58 wilayas and their 1541 communes are reference data the site publishes
 rather than something this client scrapes, so they are seeded once into an empty
-database. The same file serves SQLite and Postgres:
+database. Both delivery prices and the recipient form need them, and without them
+the first `sync` stops and tells you to run this.
+
+**From the application, whichever database you point it at:**
 
 ```bash
-# SQLite, the default
-sqlite3 database/sawa9ly.db < src/seeds/wilayas_communes.sql
+python main.py shipping seed
+```
 
-# Postgres, if DATABASE_URL points at one
+That is the one to use inside a container. It goes through the application's own
+engine and the configured `DATABASE_URL`, so it needs no database client at all —
+which matters because the application image ships `psycopg` and no `psql`, so on a
+VPS there is nothing else to run it with.
+
+The file is plain SQL, so a client works too, if you have one:
+
+```bash
+sqlite3 database/sawa9ly.db < src/seeds/wilayas_communes.sql
 psql "$DATABASE_URL" -f src/seeds/wilayas_communes.sql
 ```
 
-Both delivery prices and the recipient form need them, and without them the first
-`sync` stops and tells you to run one of those.
-
-On the compose stack the client is already in the container:
-
-```bash
-docker compose --env-file .env.docker -f docker-compose.postgres.yml \
-  exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" \
-  < src/seeds/wilayas_communes.sql
-```
-
-Re-running the file is safe but clears the saved delivery prices, since they point
-at the wilayas; one `python main.py shipping sync` restores them.
+Re-running is safe but clears the saved delivery prices, since they point at the
+wilayas; one `python main.py shipping sync` restores them.
 
 Or, in containers:
 

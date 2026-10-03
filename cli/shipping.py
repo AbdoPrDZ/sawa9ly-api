@@ -1,6 +1,6 @@
 """CLI: the site's delivery reference data and its prices per wilaya."""
 
-from src.services import Shipping
+from src.services import Seed, Shipping
 
 
 class ShippingCli:
@@ -28,6 +28,8 @@ class ShippingCli:
     communes.add_argument('--wilaya-id', type=int, default=None,
                           help="only this wilaya's communes")
 
+    actions.add_parser('seed', help="load the wilaya and commune reference data")
+
   @staticmethod
   def dispatch(args):
     from cli.base import Cli
@@ -54,3 +56,12 @@ class ShippingCli:
     if args.action == 'communes':
       with Cli.db() as db:
         return {'communes': [c.as_dict() for c in Commune.all(db, args.wilaya_id)]}
+
+    if args.action == 'seed':
+      # Deliberately needs no client. The seed is plain SQL and can be handed to
+      # sqlite3 or psql, but the application image carries neither, so on a VPS the
+      # only thing available inside the container is the Python this command is
+      # already running in. It uses the configured DATABASE_URL, so it is the same
+      # database the application reads whichever engine that points at.
+      with Cli.db() as db:
+        return Seed.load(db)

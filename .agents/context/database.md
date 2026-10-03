@@ -122,12 +122,16 @@ everybody, and `DeliveryPrice` hangs off `Wilaya` rather than off a user.
   children first, which is also what makes the file safe to re-run — at the cost of
   the saved delivery prices, which point at the wilayas and are one
   `shipping sync` away from being restored.
-  - **Both engines are configured for; a change that only works on one is a
-    defect.** `DATABASE_URL` picks. Load it with `sqlite3 … <` or
-    `psql "$DATABASE_URL" -f`, and the compose stack's Postgres already has the
-    client in the container. Postgres has not been exercised against this seed —
-    there is no server here — so the compatibility claim rests on the grammar, not
-    on a run.
+- **Both engines are configured for; a change that only works on one is a
+    defect.** `DATABASE_URL` picks. The file is plain SQL so `sqlite3 … <` and
+    `psql "$DATABASE_URL" -f` both load it, but **the application image ships
+    `psycopg` and no `psql`**, so the way to run it from inside a container is
+    `python main.py shipping seed` — the application's own engine and the Python
+    already running, needing no client. It executes one statement at a time
+    because `sqlite3` refuses several per `execute()` and psycopg accepts them,
+    which is the only shape that behaves the same on both. Postgres has not been
+    exercised against this - there is no server here - so that claim rests on the
+    grammar, not on a run.
 - **`Order`** — belongs to a user, optionally to a client. Deleting a client sets
   its orders' `client_id` to null rather than deleting them; an order must not
   vanish because a recipient was removed from the address book.
