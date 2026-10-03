@@ -67,6 +67,10 @@ python main.py checkout --user alice \
 | `catalogue list` | List saved products |
 | `client add <name> --user <u> [--phone …]` | Add or update a delivery recipient |
 | `client list --user <u>` | List a user's clients |
+| `shipping sync [--user <u>]` | Scrape the site's delivery prices and save them |
+| `shipping list [--available yes\|no]` | List saved delivery prices |
+| `shipping wilayas` | List the 58 wilayas |
+| `shipping communes [--wilaya-id <n>]` | List communes, or one wilaya's |
 | `order create --user <u> [--client <id>]` | Start a draft order |
 | `order add <order> <product> [--quantity] [--price]` | Add a product to a draft |
 | `order remove <order> <product>` | Remove a product from a draft |

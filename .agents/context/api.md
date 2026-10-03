@@ -99,8 +99,17 @@ The dashboard uses a different credential: it posts a username and password to
 dependencies, separate token formats. `get_current_user` accepts only an API key;
 `get_any_user` accepts either, and is used on the `/api/v1` routes a machine and the
 browser both drive (`/api/v1/trackers`, `/api/v1/orders`, `/api/v1/clients`,
-`/api/v1/pages`). Every other `/api/v1` route stays API-key only, because only
-the API key identifies a user for a resource the dashboard does not own.
+`/api/v1/pages`, `/api/v1/shipping`). Every other `/api/v1` route stays API-key
+only, because only the API key identifies a user for a resource the dashboard does
+not own.
+
+**A dashboard screen is what puts a route on `get_any_user`, and getting this
+wrong is silent.** A route left on `get_current_user` answers the browser's token
+with 401 "Unknown API key" — the dashboard's `usePagedList` treats a 401 as "no
+longer allowed", calls `invalidate`, clears the token and drops the person on the
+**login screen**, with nothing in the page to say a permission was the problem. The
+symptom looks like a broken route or a bad session rather than a gate. When
+adding a screen, decide the gate from the credential the screen will send.
 
 ## The mirroring rule
 
@@ -137,10 +146,28 @@ schema.
 ## Resources
 
 Grouped by the page they drive, which is also how the controllers are split:
-products, cart, checkout, catalogue, clients, orders, trackers, plus the
+products, cart, checkout, catalogue, shipping, clients, orders, trackers, plus the
 unversioned `/api/health` and `/api/me`. Orders are the deepest: an order has lines, and
 a line is addressed by product id rather than by line id, because a product
 appears at most once in an order.
+
+**Global reference data can still be credential-gated, and the two resources that
+hold it handle the session differently.** `/api/v1/catalogue` carries no
+`Depends` at all and borrows a session through `User.browsable`;
+`/api/v1/shipping` is gated on `get_any_user` and scrapes through **the caller's
+own** session. Same kind of data — one list for everybody — and the difference is
+what the route knows: with no dependency there is no caller to borrow for, and
+with one there is. `User.browsable` is documented as being for the operations that
+read the site on behalf of nobody in particular, so borrowing on the shipping
+route would be using it for the case it excludes. The credential there decides who
+may read the list and whose session fetches it, never whose rows are touched.
+
+`ShippingController` owns **three** resources — the prices, the wilayas and the
+communes — because they are one thing to a caller: what delivery costs and where.
+Splitting them would mean three routers for 58 rows, 1541 rows and a derived list,
+and a caller wanting a wilaya's commune would have to know which of the three the
+data had moved to. The wilayas and the communes are local reads with no session at
+all, so the only thing they share with the sync is the prefix.
 
 **Orders have two read surfaces, and they answer different questions.**
 `/api/v1/orders` is "my orders" — caller-scoped, API key *or* dashboard token, and it

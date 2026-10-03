@@ -4,6 +4,7 @@ import type { NewClient } from '../../api/types'
 import { Field } from '../../components/Field'
 import { Modal } from '../../components/Modal'
 import { useI18n } from '../../i18n/useI18n'
+import { WilayaCommuneFields } from './WilayaCommuneFields'
 
 /**
  * Adds a delivery recipient, or edits one already stored under the same name.
@@ -15,6 +16,13 @@ import { useI18n } from '../../i18n/useI18n'
  * The field names are translated but not the column headers the site uses, and
  * `adresse` is left as the site's own French spelling rather than corrected —
  * it is the word on their form, and matching it is the point.
+ *
+ * **No note field.** A note belongs to an order or to one of its lines, and both
+ * of those still have one; on a recipient it was never read.
+ *
+ * The wilaya and the commune are a pair, so they are one component rather than two
+ * fields here: the commune list depends on the wilaya, and a form that let you set
+ * them independently would happily produce a pair the site rejects.
  */
 export function CreateClientModal({
   onCancel,
@@ -29,7 +37,6 @@ export function CreateClientModal({
   const [adresse, setAdresse] = useState('')
   const [wilayaId, setWilayaId] = useState('')
   const [communeId, setCommuneId] = useState('')
-  const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function submit(event: FormEvent) {
@@ -50,7 +57,6 @@ export function CreateClientModal({
         adresse: adresse.trim() || null,
         wilaya_id: wilaya,
         commune_id: commune,
-        note: note.trim() || null,
       })
     } finally {
       setBusy(false)
@@ -78,25 +84,14 @@ export function CreateClientModal({
           <input value={adresse} onChange={(event) => setAdresse(event.target.value)} />
         </Field>
 
-        <Field label={t('client.fieldWilaya')} hint={t('client.fieldWilayaHint')}>
-          <input
-            type="number"
-            value={wilayaId}
-            onChange={(event) => setWilayaId(event.target.value)}
-          />
-        </Field>
-
-        <Field label={t('client.fieldCommune')} hint={t('client.fieldCommuneHint')}>
-          <input
-            type="number"
-            value={communeId}
-            onChange={(event) => setCommuneId(event.target.value)}
-          />
-        </Field>
-
-        <Field label={t('client.fieldNote')} hint={t('client.fieldNoteHint')}>
-          <input value={note} onChange={(event) => setNote(event.target.value)} />
-        </Field>
+        <WilayaCommuneFields
+          wilayaId={wilayaId}
+          communeId={communeId}
+          onChange={(nextWilaya, nextCommune) => {
+            setWilayaId(nextWilaya)
+            setCommuneId(nextCommune)
+          }}
+        />
 
         <div className="modal-actions">
           <button type="button" className="btn btn-ghost" onClick={onCancel}>

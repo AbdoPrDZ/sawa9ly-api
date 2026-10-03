@@ -30,7 +30,7 @@ class ClientsTools:
 
   @staticmethod
   def create_client(full_name: str, phone: str = None, adresse: str = None,
-                    wilaya_id: int = None, commune_id: int = None, note: str = None):
+                    wilaya_id: int = None, commune_id: int = None):
     """Add a delivery recipient, or update the one with the same name.
 
     The name is the identity, so creating somebody who already exists edits that
@@ -42,7 +42,7 @@ class ClientsTools:
     with session_scope() as db:
       return Client.get_or_create(
         db, user.id, full_name, phone=phone, adresse=adresse,
-        wilaya_id=wilaya_id, commune_id=commune_id, note=note,
+        wilaya_id=wilaya_id, commune_id=commune_id,
       ).as_dict()
 
   @staticmethod

@@ -26,26 +26,31 @@ default, overridable with `DATABASE_URL` for a server deployment.
 - `check_same_thread=False` is required for SQLite because FastAPI's threadpool
   hands a session to a worker thread.
 - `init_db()` calls `create_all`, which **creates missing tables and nothing
-  else**. It does not alter, migrate or backfill an existing file. The project is
-  **not in production, so a schema change means editing the model and deleting
-  `database/sawa9ly.db`** to rebuild it. There is deliberately no migration runner.
-  Stop any running server first — an open connection keeps the file locked on
-  Windows and the delete fails.
-
-  **The one time a column was added without a rebuild.** `api_keys.type` arrived
-  after that database had real rows in it, and rebuilding would have thrown away
-  orders, saved products and keys. The answer was one `ALTER TABLE … ADD COLUMN
-  … NOT NULL DEFAULT 'api'` plus an index, run by hand, with a file copy taken
-  first and the tables verified after. That is not a migration framework and
-  should not become one — it is the record of what happens when the rebuild is no
-  longer an option, and the next reader should see that it has been done once and
-  that the rebuild remains the default. A `server_default` on the column is what
-  makes the statement safe: SQLite has to rewrite every row, and it cannot do
-  that for a column with no default.
-
-  Give a new column a `server_default` as well as its Python default for the same
-  reason. It is what lets `ALTER TABLE` say something true, and it is what makes a
-  row written by any other means read back correctly instead of as `NULL`.
+  else**. It does not alter, migrate or backfill an existing file. There is
+  deliberately no migration runner.
+- **The database is live.** `database/sawa9ly.db` holds real users, real orders
+  and live session cookies, so the rebuild that used to be the answer to a schema
+  change — edit the model, delete the file, let `create_all` rebuild it — is now
+  **off limits**. Adding a table needs nothing at all: `create_all` makes the
+  missing one. Changing a column means an `ALTER TABLE … ADD COLUMN` run by hand,
+  against a copy first.
+- Check what a table looks like on disk before changing a model against it, and
+  check it with `inspect(engine).get_columns(...)` against
+  `Model.__table__.columns`. `create_all` will not add a column that is missing,
+  so the first query after the change is what finds out — and it finds out by
+  failing.
+- **A column was added without a rebuild once, and the record of how matters.**
+  `api_keys.type` arrived after that database had real rows in it, and rebuilding
+  would have thrown away orders, saved products and keys. The answer was one
+  `ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT 'api'` plus an index, run by hand,
+  with a file copy taken first and the tables verified after. That is not a
+  migration framework and should not become one; it is here because the rebuild is
+  no longer the default and the next reader should see the alternative that works.
+  A `server_default` on the column is what makes the statement safe: SQLite has to
+  rewrite every row, and it cannot do that for a column with no default. Give a
+  new column a `server_default` as well as its Python default for the same reason
+  — it is what lets `ALTER TABLE` say something true, and what makes a row written
+  by any other means read back correctly instead of as `NULL`.
 - `session_scope()` is a session usable as a context manager. Controllers get one
   via `Dependencies.get_db`; CLI commands open one per command. There is no unit
   of work and no nested-transaction machinery, so keep each command or request
@@ -53,7 +58,10 @@ default, overridable with `DATABASE_URL` for a server deployment.
 
 ## Entities and how they relate
 
-`User` is the aggregate root. Everything except `Product` hangs off it.
+`User` is the aggregate root. Everything except the three global tables hangs
+off it — `Product`, `Wilaya` and `Commune` belong to nobody, because the site
+publishes one catalogue, one price list and one administrative division for
+everybody, and `DeliveryPrice` hangs off `Wilaya` rather than off a user.
 
 - **`User`** — the account we act as. Holds `username`, the sawa9ly `email` and
   `password` for logging into the site, a `role` (`super`, `admin` or `user`), and
@@ -87,7 +95,25 @@ default, overridable with `DATABASE_URL` for a server deployment.
   text, because they are opaque lists of strings from the site and nothing
   queries inside them.
 - **`Client`** — a delivery recipient, per user. Referenced by orders, and its
-  fields are what the checkout form is filled from.
+  fields are what the checkout form is filled from. Its `wilaya_id` and
+  `commune_id` are the site's ids, the same numbers `Wilaya.id` and
+  `Commune.id` hold, but they are plain integers rather than foreign keys: a
+  recipient is saved before it is necessarily complete.
+- **`DeliveryPrice`** — what it costs to ship to one wilaya. Global, not per user,
+  and `wilaya_id` is a **foreign key** to `wilayas.id` under a unique index, so a
+  re-sync updates the row rather than adding a second one and the row carries a
+  name as well as a number. Home and office prices are `Numeric` because the two
+  numbers are the reason the table exists; the site's `'9,500 دج'` display text is
+  parsed on the way in and never stored.
+- **`Wilaya` / `Commune`** — the delivery reference data, and the root of it. Both
+  are global and both are **keyed by the site's own id** as the primary key,
+  because those are the numbers the checkout form is sent; neither is ever
+  autoincrement. Seeded from `src/seeds/wilayas_communes.sql` and never written by
+  the application. `communes.wilaya_id` points at `wilayas.id`, and neither
+  relationship cascades — a wilaya or a commune is reference data the site's own
+  form depends on, so removing one would orphan whatever pointed at it. See
+  `domains/catalogue.md` for how the commune-to-wilaya mapping is established and
+  why it is not a name match.
 - **`Order`** — belongs to a user, optionally to a client. Deleting a client sets
   its orders' `client_id` to null rather than deleting them; an order must not
   vanish because a recipient was removed from the address book.

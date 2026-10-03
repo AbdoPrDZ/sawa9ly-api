@@ -39,11 +39,16 @@ export interface PageResult<T> {
 
 /** What a list screen passes to a list route. Every field is optional, and
  * omitting all of them asks for the whole list.
+ *
+ * `available` is the one non-text filter in the app: it narrows the delivery
+ * prices to the wilayas the site does or does not serve. Left out, the route
+ * answers for all of them — the filter is a narrowing, never a default.
  */
 export interface ListQuery {
   q?: string
   limit?: number
   offset?: number
+  available?: boolean
 }
 
 
@@ -156,6 +161,27 @@ export interface Tracker {
   target: CatalogueProduct | null
 }
 
+/** What it costs to ship one order to one wilaya, as of the last scrape.
+ *
+ * Global rather than per user: the site publishes one price list for everybody,
+ * so nothing here says whose scrape produced it.
+ *
+ * `price` is home delivery and `office_price` is collection from the carrier's
+ * office. Both are null for a wilaya the site does not serve, which is what
+ * `available` says outright rather than leaving to be read off the nulls — a null
+ * price and a wilaya that is not served are different facts.
+ */
+export interface DeliveryPrice {
+  id: number
+  /** The site's own wilaya id, the same one `Client.wilaya_id` holds. */
+  wilaya_id: number
+  /** The site's own Arabic spelling of that wilaya, resolved through the key. */
+  wilaya_name: string | null
+  available: boolean
+  price: number | null
+  office_price: number | null
+}
+
 /** Where an order has got to. Mirrors the server's `OrderState`; the server
  * decides what may move where, this only decides how to display it.
  */
@@ -203,10 +229,32 @@ export interface Order {
   username?: string | null
 }
 
+/** One of the 58 wilayas, under the site's own id.
+ *
+ * `number` is the zero-padded form the site prints beside the name (`01`). It is
+ * not a second key — it is what a recipient and an order line refer to, so a form
+ * shows it next to the name.
+ */
+export interface Wilaya {
+  id: number
+  name: string
+  number: string | null
+}
+
+/** One commune, under the site's own id and naming the wilaya it is in. */
+export interface Commune {
+  id: number
+  wilaya_id: number
+  name: string
+}
+
 /** A delivery recipient one of the signed-in user's orders can be shipped to.
  *
  * The field names are the site's, not ours: `adresse` and `wilaya_id` come
  * straight off its checkout form, which is the whole point of storing them.
+ *
+ * There is no `note`. It was never read by anything; a note belongs to an order
+ * or to one of its lines, and both of those still have one.
  */
 export interface Client {
   id: number
@@ -216,7 +264,6 @@ export interface Client {
   adresse: string | null
   wilaya_id: number | null
   commune_id: number | null
-  note: string | null
 }
 
 /** What a new or updated client needs. `full_name` is the only required field. */
@@ -226,7 +273,6 @@ export interface NewClient {
   adresse?: string | null
   wilaya_id?: number | null
   commune_id?: number | null
-  note?: string | null
 }
 
 /** Where a landing page is in its life. Mirrors the server's `PageState`. */

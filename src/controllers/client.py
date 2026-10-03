@@ -47,7 +47,7 @@ class ClientController:
     client = Client.get_or_create(
       db, user.id, body.full_name,
       phone=body.phone, adresse=body.adresse,
-      wilaya_id=body.wilaya_id, commune_id=body.commune_id, note=body.note,
+      wilaya_id=body.wilaya_id, commune_id=body.commune_id,
     )
     return client.as_dict()
 

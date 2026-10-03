@@ -19,6 +19,8 @@ src/
     session.ts             login, me
     profile.ts            getProfile, updateProfile, sawa9lyLogin
     catalogue.ts          listProducts, getProduct, saveProduct
+    shipping.ts           listPrices
+    wilayas.ts            listWilayas, listCommunes
     orders.ts             listOrders, getOrder
     trackers.ts            listTrackers, watch, unwatch
     telegram.ts           getBinding, issueLink, unbind
@@ -32,15 +34,16 @@ src/
     useSession.ts          the hook pages use
   components/              Banner, Field, Modal, OrderStateBadge, PageStateBadge,
                             RoleBadge, KeyState, Spinner, TopBar, WatchButton,
-                            FetchProduct
+                            FetchProduct, FilterGroup
   features/
     users/                 CreateUserModal, EditUserModal, DeleteUserModal
     keys/                  IssueKeyModal, RevokeKeyModal, RevealKeyModal
-    clients/               CreateClientModal
+    clients/               CreateClientModal, WilayaCommuneFields
     pages/                 CreatePageModal, EditPageModal
     telegram/              TelegramCard
   pages/                   Login, Users, ApiKeys, Profile, Products,
-                            ProductDetail, Orders, OrderDetail, Clients, Pages
+                            ProductDetail, Shipping, Orders, OrderDetail, Clients,
+                            Pages
 ```
 
 `api/` is split by resource and `features/` by the flow it belongs to, so a new
@@ -199,6 +202,7 @@ Every route below is relative to the `/dashboard` basename.
 | `/profile` | `ProfilePage` | every signed-in user |
 | `/products` | `Products` | every signed-in user |
 | `/products/:productId` | `ProductDetail` | every signed-in user |
+| `/shipping` | `Shipping` | every signed-in user |
 | `/orders` | `Orders` | every signed-in user |
 | `/orders/:orderId` | `OrderDetail` | every signed-in user |
 | `/clients` | `Clients` | every signed-in user |
@@ -259,6 +263,40 @@ scrapes. That predates the dashboard and is left alone deliberately, but the
 dashboard makes it easier to reach, so it is worth an access rule before this is
 exposed to anyone.
 
+## Shipping
+
+`Shipping` lists what the site charges to deliver to each wilaya. It is **read-only
+and free**: it calls `GET /api/v1/shipping` and never reaches sawa9ly.app. There
+is no sync button, deliberately — refreshing the prices is
+`python main.py shipping sync` or `POST /api/v1/shipping`, so nothing on a list
+screen can cost a request to the site.
+
+Its filter is a `FilterGroup` over served / not served, which is the question the
+table exists to answer: "can you ship to X, and for how much". **Unavailable
+wilayas are listed rather than hidden**, so `not served` is an offer and not dead
+space — a table of only the wilayas you can ship to cannot answer the question at
+all. Changing the filter resets to page 0, because page numbers belong to the slice
+that was showing; narrowing to three rows from page 2 would otherwise show an empty
+table with no sign of why.
+
+There is **no search box** here, and that is not an oversight: the route has no `q`,
+so a term would be sent and ignored — which reads as a search that half works. See
+`domains/catalogue.md`.
+
+`/api/v1/shipping` takes `get_any_user`, so this screen works with the dashboard's
+own token. A route left on `get_current_user` answers that token with a 401, which
+`usePagedList` reads as "no longer allowed" and answers by clearing the token and
+showing the **login screen** — the failure looks like a bad session, not a gate.
+
+**`/shipping/wilayas` and `/shipping/communes` are the delivery reference data, on
+the same controller.** They read the local tables and never touch the site, which
+is what `Shipping` being one controller for the delivery resource rather than one
+per table means. The wilayas are a bare array and not a `Page`: 58 rows that do not
+change between syncs, so paging them would be a control with nothing to control.
+`/shipping/communes` takes an optional `wilaya_id` and answers an empty list for an
+unknown one — see `domains/catalogue.md` for why that pairing cannot be read off
+the site, which is the whole reason the filter exists.
+
 ## Orders
 
 `Orders` and `OrderDetail` are **read-only**, and that is a deliberate limit, not
@@ -270,11 +308,11 @@ the API, and the dashboard only reports what already happened.
 Both read `/api/v1/orders`, which means they are one of the places the dashboard
 calls a `/api/v1` route that is **not** the open catalogue. Those handlers use
 `Dependencies.get_any_user`, so they accept a dashboard token as well as an API
-key. This is the same either-credential arrangement `/api/v1/trackers` and
-`/api/v1/clients` have, and it is safe for the same reason: every order handler is
-scoped to `order.user_id == caller.id`, so neither credential reaches another
-user's orders. `/api/v1/cart`, `/api/v1/checkout` and `/api/v1/products` stay
-API-key only.
+key. This is the same either-credential arrangement `/api/v1/trackers`,
+`/api/v1/clients`, `/api/v1/pages` and `/api/v1/shipping` have, and it is safe for
+the same reason: every order handler is scoped to `order.user_id == caller.id`, so
+neither credential reaches another user's orders. `/api/v1/cart`,
+`/api/v1/checkout` and `/api/v1/products` stay API-key only.
 
 **A `super` sees every user's orders.** `Orders` calls `/api/admin/orders` and
 `OrderDetail` calls `/api/admin/orders/{id}` when `user.role === 'super'`, and both
@@ -317,6 +355,20 @@ another user's page or client gets a 404, the same as anyone else.
 name again but cannot be removed from the UI. `Pages` has list, create and edit
 but likewise no delete. Both are deliberate: a delete was not asked for, and
 adding one is a route plus a control.
+
+**The wilaya and the commune are one component, `WilayaCommuneFields`, not two
+fields in the modal.** They were number inputs, which asked whoever was writing
+down an address to know the site's internal numbering for their own province.
+They are now two selects fed by `/shipping/wilayas` and
+`/shipping/communes?wilaya_id=`, and the component exists because the commune list
+depends on the wilaya: **changing the wilaya clears the commune**, since the site
+rejects a pair whose commune is not in the chosen wilaya. A form that let the two
+be set independently would produce exactly that pair.
+
+The wilaya option shows `number - name`, because the number is what an order line
+and the site both refer to and a name alone loses it. An unknown `wilaya_id`
+answers an empty list rather than a 404: the id comes from the list beside it, so
+a stale one means the caller is out of date, not that the wilaya was deleted.
 
 `Pages` stores a page's markup and serves it publicly at `/pages/{public_id}`
 when its state is `publish`. That is the only consumer of the state field, and

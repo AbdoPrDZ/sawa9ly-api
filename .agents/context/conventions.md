@@ -12,9 +12,11 @@ deviation or "fix" it by accident.
   `User.get_or_create`, `ApiKey.find`, `Order.all`, `Product.save`. Instances
   hold behaviour that needs state; the class holds lookups.
 - **Page services** (`src/services/`) extend `Selector` and own a URL plus a
-  `guide`. `Cart` and `Product` are thin over the site; `OrderService` is the
-  exception — it is pure local domain logic that *uses* `Cart` to talk to the
-  site, and it is the only service that takes a database session.
+  `guide`. `Cart`, `Product` and `Shipping` are thin over the site;
+  `OrderService` is the exception — it is pure local domain logic that *uses*
+  `Cart` to talk to the site, and it is the only service that takes a database
+  session. A service that both scrapes and saves composes instead: the caller does
+  `Entity.sync(db, Page(client).get_...)`, so the page service keeps no session.
 - **Controllers** (`src/controllers/`) own an `APIRouter` and register handlers in
   the class body. They translate HTTP to a service call and back, and hold no
   business logic. **One controller per resource**, so admin users and admin API
@@ -101,6 +103,14 @@ line count, `--json order list` returns the full lines. A change that needs full
 data in the table should change the renderer, not start printing from a
 command.
 
+**`App._utf8_stdout` runs before every print, and it is not optional.** A Windows
+console defaults to cp1252 and `print` raises `UnicodeEncodeError` rather than
+substituting, so any command whose output carries a wilaya, a commune or an Arabic
+product title used to die at the last line — after doing the work. The fix is at
+the one place that writes to the terminal rather than in each command, because the
+alternative is every future command rediscovering it. Redirected output is already
+UTF-8 and is left alone.
+
 ## Known departures from `AGENTS.md`
 
 `AGENTS.md` says not to add module-level functions. The rule is followed in
@@ -139,6 +149,9 @@ that the rules in `AGENTS.md` generalise:
 - Several cart selectors are only correct for a specific cart or product
   ordering, which is why a selector that suddenly stops matching should be
   re-probed rather than patched.
+- `/shipping` has no wire component at all, so its guide is class chains and a
+  re-probe is the only defence. The failure is silent: fewer cards matched looks
+  like wilayas that are not served. See `domains/catalogue.md`.
 
 ## Where the site is actually driven
 

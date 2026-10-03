@@ -1,7 +1,7 @@
 # Sawa9ly API
 
 A client for [sawa9ly.app](https://sawa9ly.app) — a Livewire/Laravel storefront —
-covering product scraping, cart management, and order checkout.
+covering product scraping, delivery prices, cart management, and order checkout.
 
 The site is driven by Livewire v3, so nothing here is plain HTTP. Every action is
 a `POST` to `/livewire/update` carrying the component's `wire:snapshot`;
@@ -54,6 +54,20 @@ python main.py serve
 
 - Dashboard: <http://127.0.0.1:8000/dashboard/>
 - API reference: <http://127.0.0.1:8000/docs>
+
+### One thing to load first
+
+The 58 wilayas and their 1541 communes are reference data the site publishes
+rather than something this client scrapes, so they are seeded once into an empty
+database:
+
+```bash
+sqlite3 database/sawa9ly.db < src/seeds/wilayas_communes.sql
+```
+
+The delivery prices and the recipient form both need them, and without them the
+first `shipping sync` stops and tells you to run exactly that. On Docker the
+`sqlite` service has the file mounted, so the same one-liner works inside it.
 
 Or, in containers:
 

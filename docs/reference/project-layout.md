@@ -38,6 +38,9 @@ src/
     api_key.py              ApiKey + KeyType: hashed keys, and which surface takes one
     product.py              Product: saved catalogue info
     client.py               Client: delivery recipient
+    wilaya.py               Wilaya: one of the 58, keyed by the site's id
+    commune.py              Commune: a town, keyed by the site's id
+    delivery_price.py       DeliveryPrice: what delivery to a wilaya costs
     order.py                Order + OrderState
     order_line.py           OrderLine: one product on an order
     landing_page.py         LandingPage + PageState: a user page per product
@@ -47,6 +50,7 @@ src/
     __init__.py
     product.py              Product page service
     cart.py                 Cart page service
+    shipping.py             Shipping page service: the site's delivery prices
     order.py                OrderService: draft editing and checkout
     order_page.py           OrderPage: reads the site's own order page
     landing_page.py         LandingPageService: create, edit, move state, describe

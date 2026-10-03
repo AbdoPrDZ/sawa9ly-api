@@ -91,8 +91,7 @@ const { invalidate } = useSession()
               <th>{t('clients.col.phone')}</th>
               <th>{t('clients.col.adresse')}</th>
               <th>{t('clients.col.wilaya')}</th>
-              <th>{t('clients.col.commune')}</th>
-              <th>{t('clients.col.note')}</th>
+<th>{t('clients.col.commune')}</th>
             </tr>
           </thead>
           <tbody>
@@ -102,8 +101,7 @@ const { invalidate } = useSession()
                 <td className="font-mono text-xs">{client.phone ?? t('generic.unknown')}</td>
                 <td>{client.adresse ?? t('generic.unknown')}</td>
                 <td className="text-muted">{client.wilaya_id ?? t('generic.unknown')}</td>
-                <td className="text-muted">{client.commune_id ?? t('generic.unknown')}</td>
-                <td className="max-w-xs truncate text-muted">{client.note ?? t('generic.unknown')}</td>
+<td className="text-muted">{client.commune_id ?? t('generic.unknown')}</td>
               </tr>
             ))}
 </tbody>

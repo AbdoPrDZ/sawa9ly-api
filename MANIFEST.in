@@ -7,6 +7,12 @@ include CHANGELOG.md
 include LICENSE
 include src/version.py
 
+# The delivery reference data (58 wilayas, 1541 communes). Not applied
+# automatically — it is loaded once into an empty database, and the error that
+# says so names this path — so a distribution without it is an install that
+# cannot complete that one step.
+include src/seeds/*.sql
+
 # The dashboard's build output is not part of the distribution. The API serves
 # dashboard/dist when it exists and skips the dashboard when it does not, so an
 # sdist without it is a working API-only install.

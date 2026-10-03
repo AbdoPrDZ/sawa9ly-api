@@ -3,6 +3,8 @@
 from src.db import Base
 from src.models.api_key import ApiKey, KeyType
 from src.models.client import Client
+from src.models.commune import Commune
+from src.models.delivery_price import DeliveryPrice, ReferenceDataMissing
 from src.models.landing_page import LandingPage, PageState
 from src.models.notification import Notification
 from src.models.notification_delivery import NotificationDelivery
@@ -14,12 +16,15 @@ from src.models.setting import SESSION_KEY, Setting
 from src.models.telegram_binding import TelegramBinding, TelegramBindingError
 from src.models.tracker import TargetModel, Tracker
 from src.models.user import Role, User
+from src.models.wilaya import Wilaya
 
 
 __all__ = [
   "ApiKey",
   "Base",
   "Client",
+  "Commune",
+  "DeliveryPrice",
   "KeyType",
   "LandingPage",
   "Notification",
@@ -29,6 +34,7 @@ __all__ = [
   "OrderState",
   "PageState",
   "Product",
+  "ReferenceDataMissing",
   "Role",
   "SESSION_KEY",
   "Secret",
@@ -38,4 +44,5 @@ __all__ = [
   "TargetModel",
   "Tracker",
   "User",
+  "Wilaya",
 ]

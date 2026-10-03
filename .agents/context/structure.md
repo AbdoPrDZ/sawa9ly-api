@@ -38,7 +38,7 @@ this file; only a change in organisation does.
 | `domains/authentication.md` | API keys, dashboard passwords and tokens, roles, per-user sawa9ly sessions. |
 | `domains/orders.md` | Order lifecycle, state machine, the internal-vs-sawa9ly product id boundary. |
 | `domains/checkout.md` | Driving the site's two-step checkout; the commission floor; dry-run semantics. |
-| `domains/catalogue.md` | Saved product info and delivery clients as reference data. |
+| `domains/catalogue.md` | Saved product info, delivery prices and delivery clients as reference data. |
 | `domains/i18n.md` | English/French/Arabic: the per-user language, the message catalogues, one notification row per language, and RTL. |
 
 ### What does not belong anywhere here

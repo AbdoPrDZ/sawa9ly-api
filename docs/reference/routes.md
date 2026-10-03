@@ -14,6 +14,8 @@ The **machine-facing** routes sit under **`/api/v1`**:
 | `POST /api/v1/checkout` | Set quantities/prices, fill the form, submit |
 | `GET /api/v1/catalogue`, `GET /api/v1/catalogue/{id}`, `POST /api/v1/catalogue/{id}` | Saved product info |
 | `GET/POST /api/v1/clients`, `GET /api/v1/clients/{id}` | Delivery recipients |
+| `GET /api/v1/shipping`, `POST /api/v1/shipping` | Delivery prices per wilaya; the POST scrapes |
+| `GET /api/v1/shipping/wilayas`, `GET /api/v1/shipping/communes` | The 58 wilayas, and their communes |
 | `GET/POST /api/v1/pages`, `GET/PATCH /api/v1/pages/{id}` | Landing pages, one per user |
 | `GET/POST /api/v1/orders`, `GET /api/v1/orders/{id}` | Orders |
 | `POST /api/v1/orders/{id}/lines` | Add a product to a draft |

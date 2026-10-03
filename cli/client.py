@@ -14,7 +14,6 @@ class ClientCli:
     add.add_argument('--adresse', default=None)
     add.add_argument('--wilaya-id', type=int, default=None)
     add.add_argument('--commune-id', type=int, default=None)
-    add.add_argument('--note', default=None)
     add.add_argument('--user', help="the account to act as; defaults to the super admin")
 
     listing = actions.add_parser('list', help="list a user's clients")
@@ -32,7 +31,7 @@ class ClientCli:
         client = Client.get_or_create(
           db, user.id, args.full_name,
           phone=args.phone, adresse=args.adresse,
-          wilaya_id=args.wilaya_id, commune_id=args.commune_id, note=args.note,
+          wilaya_id=args.wilaya_id, commune_id=args.commune_id,
         )
         return client.as_dict()
 

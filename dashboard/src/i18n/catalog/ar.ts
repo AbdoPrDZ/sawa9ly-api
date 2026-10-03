@@ -210,7 +210,7 @@ export const ar: Record<MessageKey, string> = {
   'clients.col.adresse': 'العنوان',
   'clients.col.wilaya': 'الولاية',
   'clients.col.commune': 'البلدية',
-  'clients.col.note': 'ملاحظة',
+
   'clients.saved': 'تم حفظ {name}.',
   'clients.saveFailed': 'تعذّر حفظ المستلم.',
   'client.modalTitle': 'إضافة مستلم توصيل',
@@ -221,14 +221,54 @@ export const ar: Record<MessageKey, string> = {
   'client.fieldPhoneHint': 'الرقم الذي يتصل به الموقع لتأكيد التوصيل.',
   'client.fieldAdresse': 'العنوان',
   'client.fieldAdresseHint': 'عنوان الشارع، بالطريقة التي يطلبها الموقع.',
-  'client.fieldWilaya': 'معرّف الولاية',
-  'client.fieldWilayaHint': 'المعرّف الرقمي للولاية على الموقع، لا اسمها. ضروري للإرسال.',
-  'client.fieldCommune': 'معرّف البلدية',
-  'client.fieldCommuneHint': 'المعرّف الرقمي للبلدية على الموقع.',
-  'client.fieldNote': 'ملاحظة',
-  'client.fieldNoteHint': 'اختياري. أي شيء تستحق تذكّره عنه.',
+  'client.fieldWilaya': 'الولاية',
+  'client.fieldWilayaHint':
+    'ترقيم الموقع واسمه. وهو ما يحدد البلديات المتاحة أدناه.',
+  'client.fieldCommune': 'البلدية',
+  'client.fieldCommuneHint':
+    'يتحقق الموقع من ذلك مقابل الولاية عند الطلب، لذا يجب أن يكون من القائمة أعلاه.',
+
+
   'client.submit': 'حفظ المستلم',
   'client.busy': 'جارٍ الحفظ…',
+
+  // --- delivery prices --------------------------------------------------
+  'nav.shipping': 'التوصيل',
+  // --- wilayas and communes --------------------------------------------
+  'client.pickWilaya':
+    'اختر ولاية',
+  'client.pickCommune':
+    'اختر بلدية',
+  'client.pickWilayaFirst':
+    'اختر ولاية أولًا',
+  'loading.wilayas':
+    'جارٍ تحميل الولايات',
+  'loading.communes':
+    'جارٍ تحميل البلديات',
+  'error.wilayas':
+    'تعذّر تحميل الولايات.',
+  'error.communes':
+    'تعذّر تحميل بلديات هذه الولاية.',
+
+  'shipping.title': 'أسعار التوصيل',
+  'shipping.intro':
+    'ما يطلبه الموقع لتوصيل الطلب إلى كل ولاية، كما في آخر مزامنة. القائمة واحدة للجميع، فهي ليست ملكًا لك — تحديثها أمرٌ يُنفَّذ على الخادم.',
+  'shipping.col.wilaya': 'الولاية',
+  'shipping.col.wilayaId': 'المعرّف',
+  'shipping.col.available': 'مخدومة',
+  'shipping.col.price': 'التوصيل إلى المنزل',
+  'shipping.col.officePrice': 'الاستلام من المكتب',
+  'shipping.notServed': 'غير مخدومة',
+  'shipping.filterLabel': 'تصفية حسب التغطية',
+  'shipping.filter.all': 'الكل',
+  'shipping.filter.available': 'مخدومة',
+  'shipping.filter.unavailable': 'غير مخدومة',
+  'shipping.empty': 'لم تُحفظ أي أسعار بعد.',
+  'shipping.emptyFiltered':
+    'لا ولاية في هذه القائمة. كل ولاية إما مخدومة أو غير مخدومة، فالتصفية الأخرى هي التي ستعرض صفوفًا.',
+  'shipping.emptyCli': 'احفظها بالأمر:',
+  'loading.shipping': 'جارٍ تحميل أسعار التوصيل',
+  'error.shipping': 'تعذّر تحميل أسعار التوصيل.',
 
   // --- landing pages --------------------------------------------------
   'pages.title': 'الصفحات التعريفية',
@@ -458,4 +498,5 @@ export const ar: Record<MessageKey, string> = {
   'resource.keys': 'مفاتيح API',
   'resource.clients': 'العملاء',
   'resource.pages': 'الصفحات',
+  'resource.shipping': 'أسعار التوصيل',
 }

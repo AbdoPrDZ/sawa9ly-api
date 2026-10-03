@@ -70,6 +70,11 @@ setup(
   # FastAPI, so 3.10 is the real floor. Tested on 3.14.
   python_requires=">=3.10",
   packages=find_packages(include=["src", "src.*", "cli", "cli.*", "sawa9ly"]),
+  # `src/seeds` holds data, not code, so `find_packages` does not see it — it has
+  # no `__init__.py` and never should. Without this the delivery seed is absent
+  # from a wheel, and the install step the README gives cannot be run.
+  package_data={"src": ["seeds/*.sql"]},
+  include_package_data=True,
   install_requires=Package.requirements(),
   entry_points={
     "console_scripts": [

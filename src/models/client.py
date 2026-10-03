@@ -13,6 +13,11 @@ class Client(Base):
 
   Holds the fields the site's checkout form asks for, so an order can be
   submitted without retyping them.
+
+  There is deliberately **no `note`**. A note belongs to the thing it is about, and
+  the two things that carry one — an order and a line on it — already do. On a
+  recipient it had nowhere to be shown and nothing to distinguish it from the
+  order's own note, so it was a field that could be written and never read.
   """
 
   __tablename__ = "clients"
@@ -24,7 +29,6 @@ class Client(Base):
   adresse: Mapped[str | None] = mapped_column(Text, default=None)
   wilaya_id: Mapped[int | None] = mapped_column(Integer, default=None)
   commune_id: Mapped[int | None] = mapped_column(Integer, default=None)
-  note: Mapped[str | None] = mapped_column(Text, default=None)
   created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
   user: Mapped["User"] = relationship(back_populates="clients")
@@ -94,14 +98,18 @@ class Client(Base):
     return client
 
   def checkout_fields(self):
-    """This client as the checkout form expects it."""
+    """This client as the checkout form expects it.
+
+    `note` is not here even though the site's form has one. Nothing writes it
+    from a client any more, and an absent key is simply not pushed — so the form
+    field keeps the site's own default rather than being told to clear it.
+    """
     return {
       'full_name': self.full_name,
       'phone': self.phone,
       'adresse': self.adresse,
       'wilaya_id': self.wilaya_id,
       'commune_id': self.commune_id,
-      'note': self.note,
     }
 
   def as_dict(self):
@@ -113,7 +121,6 @@ class Client(Base):
       'adresse': self.adresse,
       'wilaya_id': self.wilaya_id,
       'commune_id': self.commune_id,
-      'note': self.note,
     }
 
   def __repr__(self):

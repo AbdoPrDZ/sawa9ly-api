@@ -1,6 +1,6 @@
 /** The icon set for the sidebar, keyed by name.
  *
- * Inline rather than an icon package: there are seven of them, they never
+ * Inline rather than an icon package: there are eight of them, they never
  * change, and a dependency that exists only to draw a navigation list is one
  * more thing to keep current. Every glyph is drawn on a 24-unit grid with a
  * 1.75 stroke so they share one optical weight, and inherits `currentColor` so
@@ -23,7 +23,7 @@ export function NavIcon({ name, className }: { name: NavIconName; className?: st
   )
 }
 
-export type NavIconName = 'products' | 'orders' | 'clients' | 'pages' | 'users' | 'keys' | 'profile'
+export type NavIconName = 'products' | 'shipping' | 'orders' | 'clients' | 'pages' | 'users' | 'keys' | 'profile'
 
 const GLYPHS: Record<NavIconName, React.ReactElement> = {
   products: (
@@ -31,6 +31,15 @@ const GLYPHS: Record<NavIconName, React.ReactElement> = {
       <path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8Z" />
       <path d="m3.3 7 8.7 5 8.7-5" />
       <path d="M12 22V12" />
+    </>
+  ),
+  shipping: (
+    <>
+      {/* A van: the delivery prices, which are what it costs to send one. */}
+      <path d="M14 17V5a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h1" />
+      <path d="M14 8h4l3 3.5V17a1 1 0 0 1-1 1h-1" />
+      <circle cx="6.5" cy="18.5" r="2.5" />
+      <circle cx="17.5" cy="18.5" r="2.5" />
     </>
   ),
   orders: (

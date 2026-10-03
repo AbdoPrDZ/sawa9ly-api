@@ -9,7 +9,12 @@ The version lives in `src/version.py`. Bump it there and add an entry here in
 the same change — `setup.py` and the API's advertised version both read that
 file, so there is no second place to update.
 
-## [Unreleased]
+`[Unreleased]` is work that is committed but not yet released; it becomes a dated
+heading when the version is bumped. `1.4.0` is the first release since `1.3.0`,
+and it carries everything committed since — the MCP server and its OAuth sign-in,
+the port check and the proxy fix — together with the delivery work below.
+
+## [1.4.0] - 2026-10-03
 
 ### Fixed - every redirect came back as `http://` behind a reverse proxy
 
@@ -400,6 +405,86 @@ the host's loopback only.
   section now names both jobs and says what the orders job will and will not do,
   and a new section covers linking a chat, the listener, and why no ngrok,
   DDNS or domain is needed.
+
+### Added — delivery prices, wilayas and communes
+
+- **`shipping sync` scrapes `/shipping` and saves what it costs to deliver to
+  every wilaya.** Two prices per wilaya, because there are two ways an order
+  reaches the customer: delivered to the address, or collected from the carrier's
+  office. A wilaya the site prints `غير متوفر` for is kept as a row with both
+  prices null and `available` false, rather than omitted — "we do not deliver
+  there" and "we do not know the price" are different answers, and a wilaya that
+  *becomes* served is then an update rather than an insert. A re-sync never
+  deletes: a wilaya the page stops listing is not the same as the site saying it
+  stopped delivering there.
+  - `shipping list [--available yes|no]`, `GET /api/v1/shipping` and
+    `POST /api/v1/shipping`, and a **Shipping** screen in the dashboard filtered by
+    served / not served.
+- **`Wilaya` and `Commune`, the delivery reference data, seeded from
+  `src/seeds/wilayas_communes.sql`.** All 58 wilayas and 1541 communes under the
+  ids sawa9ly itself uses, because those are the numbers the checkout form is
+  sent. `DeliveryPrice.wilaya_id` became a foreign key to `wilayas.id`, so a saved
+  price carries a name and not only a number — the shipping page prints both but a
+  scraper can only read the number.
+  - **The site cannot answer "which communes are in this wilaya."** It has no
+    commune list page and no search, and the checkout form only narrows them at
+    step 2, behind a non-empty cart. So the pairing was established from the site's
+    own commune select, which is ordered by wilaya: each wilaya's id range is as
+    long as that wilaya has communes. Matching by transliterating the Arabic names
+    was tried and rejected — Arabic toponyms have several established Latin
+    spellings, and a wrong parent on a commune means an order the site refuses at
+    submit. The block layout is checkable and the names are not needed for the
+    mapping; its per-wilaya counts match the published figures (Algiers 57, Tizi
+    Ouzou 67, Sétif 60, Tamanrasset 5).
+  - The seed is **not** applied automatically, and `shipping sync` on an unseeded
+    database says so and names the file rather than failing on a foreign key.
+- **`GET /api/v1/shipping/wilayas` and `/api/v1/shipping/communes?wilaya_id=`,**
+  with the CLI mirror `shipping wilayas` and `shipping communes --wilaya-id`.
+  Reading local rows only; nothing on either route reaches the site.
+
+### Changed — a recipient's wilaya and commune are chosen, not typed
+
+- They were number inputs, which asked whoever was writing down an address to know
+  the site's internal numbering for their own province. They are now two selects,
+  the commune list following the wilaya. `Client.wilaya_id` and `Client.commune_id`
+  are unchanged — still the site's ids, still what gets submitted; the selects are
+  a way of choosing one, not a change to what is stored.
+- **Changing the wilaya clears the commune**, so the pair cannot be left in a state
+  the site rejects. That is why the two are one component rather than two fields.
+
+### Removed — `note` on a delivery recipient
+
+- A note belongs to the thing it is about, and the two things that carry one — an
+  order and a line on it — already do. On a recipient it had nowhere to be shown
+  and nothing to tell it apart from the order's own note. Removed from the model,
+  the schema, the CLI flag, the MCP tool and the form together, since removing it
+  from one of them would have left a write that went nowhere.
+- **This changes the published `/api/v1/clients` shape:** `note` is gone from
+  `ClientOut`. A caller reading `client.note` gets nothing rather than null.
+
+### Fixed — a dashboard screen silently signs you out
+
+- `/api/v1/shipping` was gated on `get_current_user`, which accepts an **API key**.
+  The dashboard authenticates with a **token** from `/api/auth/login`, so every
+  request answered 401, `usePagedList` read that as "no longer allowed", cleared
+  the token and dropped the person on the login screen — with nothing in the page
+  to say a permission was the problem. It now takes `get_any_user`, like every
+  `/api/v1` route the dashboard drives.
+
+### Fixed — a command that prints a place name dies on a Windows console
+
+- `print` raises `UnicodeEncodeError` against the default cp1252 rather than
+  substituting, so any command whose output carried an Arabic or French name used
+  to die at the last line, after doing the work. `catalogue list` had been failing
+  this way on any non-empty catalogue. `App._utf8_stdout` reconfigures the terminal
+  at the one place that writes to it.
+
+### Documentation
+
+- `.agents/context/database.md` said the project was **not in production** and that
+  a schema change meant deleting `database/sawa9ly.db` to rebuild it. It is live,
+  and following that advice would have destroyed it. The rebuild is now recorded as
+  off limits, alongside the one hand-run `ALTER TABLE` that predates the rule.
 
 ## [1.3.0] - 2026-09-27
 

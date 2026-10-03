@@ -32,6 +32,23 @@ what to read per task type. Read what your task touches, not everything.
 - Level-scale reference: `structure.md` (per-level file sets) and `config.md`
   (what the current settings mean).
 
+## Python
+
+**Run everything through the project's own interpreter: `.venv`.** There is
+nothing on the system path that has this project's dependencies, so a bare
+`python` or `python3` fails immediately on `ModuleNotFoundError: No module named
+'sqlalchemy'` — and then on every other package, one at a time.
+
+```text
+.venv\Scripts\python.exe main.py <command>     # Windows
+.venv/bin/python main.py <command>             # Linux, macOS
+```
+
+`requirements.txt` is unpinned, so the environment is the record of what is
+installed. **Never `pip install` into a system interpreter to make a command
+work** — that produces a second, divergent copy of the dependencies and an error
+that disappears only on the machine that has it.
+
 ## Ask before adding
 
 **Build what was asked for, and nothing else.** Do not introduce a model, a
@@ -103,6 +120,21 @@ entity with its lookups, a single component with its own styles, a test and its
 fixtures. If you cannot name the file's one responsibility in a few words, it is
 probably two files.
 
+## Temp files
+
+**Everything scratch goes in `.agents/temp/`.** Probe scripts, saved copies of a
+page, the report a probe writes, a throwaway fixture. Not in the repository root,
+not in `data/`, not next to the module being read.
+
+`.agents/.gitignore` already ignores the directory, so a probe that saves a
+500 KB page cannot be committed by accident. That is the whole reason it exists:
+a scratch file that looks committable is a scratch file somebody commits.
+
+Keep the probe beside the thing it probes only for as long as the question lasts.
+Once a selector is settled, the probe has said everything it can and it is dead
+weight — delete it rather than leaving a script that will silently rot against a
+page that has since changed.
+
 ## Style
 
 - Two-space indentation (see `.editorconfig`).
@@ -137,6 +169,10 @@ There is no test suite; verification is manual against the real site.
 - Escape `:` and `.` in attribute names: `[wire\\:model\\.live="products_quantity.5663"]`.
 - A selector returning an element with no `wire:click` is matching the wrong
   thing. Check what a broad selector actually matched.
+- **The same class can mean two things in one card.** On `/shipping`, an
+  available wilaya's card holds `div.w-2/5` twice: the left column with the name,
+  and the office price. A selector written once and reused silently picks the
+  left column. Count what a selector matched per card before trusting it.
 
 ## Errors
 

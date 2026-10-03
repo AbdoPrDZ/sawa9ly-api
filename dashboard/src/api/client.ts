@@ -71,6 +71,11 @@ const TOKEN_KEY = 'sawa9ly.dashboard.token'
  * treats a missing `q` as "no filter" and a `limit` of 0 as "no limit" — sending
  * `?q=&limit=0&offset=0` would mean the opposite of what a first page wants.
  *
+ * `available` is sent whenever it is defined, including when it is **false**: a
+ * missing one means "do not filter" and an explicit `false` means "only the ones
+ * the site does not serve", which is a different question with a different answer.
+ * That is the one value here that is not dropped for being falsy.
+ *
  * Returns `''` for an empty query so a caller can append it unconditionally.
  */
 export function listQuery(params: ListQuery = {}): string {
@@ -78,6 +83,7 @@ export function listQuery(params: ListQuery = {}): string {
 
   const q = params.q?.trim()
   if (q) search.set('q', q)
+  if (params.available !== undefined) search.set('available', String(params.available))
   if (params.limit !== undefined && params.limit > 0) search.set('limit', String(params.limit))
   if (params.offset !== undefined && params.offset > 0) search.set('offset', String(params.offset))
 

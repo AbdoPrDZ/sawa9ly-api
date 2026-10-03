@@ -14,7 +14,10 @@ interface NavEntry {
 }
 
 /** Shared reference data, so it is everybody's. */
-const CATALOGUE: NavEntry[] = [{ to: '/products', label: 'nav.products', icon: 'products' }]
+const CATALOGUE: NavEntry[] = [
+  { to: '/products', label: 'nav.products', icon: 'products' },
+  { to: '/shipping', label: 'nav.shipping', icon: 'shipping' },
+]
 
 /**
  * What one account owns: their orders, their recipients, their pages, and their
@@ -38,11 +41,11 @@ const WORK: NavEntry[] = [
  * destinations live here — who is signed in, and signing out, are in the menu at
  * the top right.
  *
- * Products, orders, clients, pages and API keys are linked for everybody. The
- * catalogue is shared reference data, while an order, a delivery recipient, a
- * landing page and a user's own API keys each belong to the user looking at them,
- * so none is an administrator's privilege. Only Users is admin-only, so a plain
- * user does not see a page whose only outcome is a 403.
+ * Products, shipping, orders, clients, pages and API keys are linked for everybody.
+ * The catalogue and the delivery prices are shared reference data, while an order,
+ * a delivery recipient, a landing page and a user's own API keys each belong to
+ * the user looking at them, so none is an administrator's privilege. Only Users is
+ * admin-only, so a plain user does not see a page whose only outcome is a 403.
  *
  * **Every offset here is logical** — `start-0`, `ps-3`, `border-e` — because the
  * whole rail flips in Arabic. A literal `left-0` or `ml-2` here would leave the

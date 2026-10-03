@@ -207,7 +207,7 @@ export const fr: Record<MessageKey, string> = {
   'clients.col.adresse': 'Adresse',
   'clients.col.wilaya': 'Wilaya',
   'clients.col.commune': 'Commune',
-  'clients.col.note': 'Note',
+
   'clients.saved': '{name} enregistré.',
   'clients.saveFailed': 'Impossible d’enregistrer le destinataire.',
   'client.modalTitle': 'Ajouter un destinataire de livraison',
@@ -218,15 +218,54 @@ export const fr: Record<MessageKey, string> = {
   'client.fieldPhoneHint': 'Le numéro que le site appelle pour confirmer la livraison.',
   'client.fieldAdresse': 'Adresse',
   'client.fieldAdresseHint': 'L’adresse postale, telle que le site la formulera.',
-  'client.fieldWilaya': 'Identifiant de wilaya',
+  'client.fieldWilaya': 'Wilaya',
   'client.fieldWilayaHint':
-    'L’identifiant numérique de la province sur le site, pas son nom. Nécessaire pour l’acheminement.',
-  'client.fieldCommune': 'Identifiant de commune',
-  'client.fieldCommuneHint': 'L’identifiant numérique de la commune sur le site.',
-  'client.fieldNote': 'Note',
-  'client.fieldNoteHint': 'Facultatif. Tout ce qu’il faut se rappeler à son sujet.',
+    'La numérotation et le nom du site. Elle détermine les communes disponibles ci-dessous.',
+  'client.fieldCommune': 'Commune',
+  'client.fieldCommuneHint':
+    'Le site le vérifie par rapport à la wilaya au moment de la commande : il doit donc venir de la liste ci-dessus.',
+
+
   'client.submit': 'Enregistrer le destinataire',
   'client.busy': 'Enregistrement…',
+
+  // --- delivery prices --------------------------------------------------
+  'nav.shipping': 'Livraison',
+  // --- wilayas and communes --------------------------------------------
+  'client.pickWilaya':
+    'Choisir une wilaya',
+  'client.pickCommune':
+    'Choisir une commune',
+  'client.pickWilayaFirst':
+    'Choisissez d’abord une wilaya',
+  'loading.wilayas':
+    'Chargement des wilayas',
+  'loading.communes':
+    'Chargement des communes',
+  'error.wilayas':
+    'Impossible de charger les wilayas.',
+  'error.communes':
+    'Impossible de charger les communes de cette wilaya.',
+
+  'shipping.title': 'Frais de livraison',
+  'shipping.intro':
+    'Ce que le site facture pour livrer dans chaque wilaya, tel que lors de la dernière synchronisation. Une liste unique pour tout le monde : elle n’est donc pas à vous de la modifier — la rafraîchir est une commande sur le serveur.',
+  'shipping.col.wilaya': 'Wilaya',
+  'shipping.col.wilayaId': 'N°',
+  'shipping.col.available': 'Desservie',
+  'shipping.col.price': 'Livraison à domicile',
+  'shipping.col.officePrice': 'Retrait au bureau',
+  'shipping.notServed': 'non desservie',
+  'shipping.filterLabel': 'Filtrer par couverture',
+  'shipping.filter.all': 'Toutes',
+  'shipping.filter.available': 'Desservies',
+  'shipping.filter.unavailable': 'Non desservies',
+  'shipping.empty': 'Aucun frais enregistré pour l’instant.',
+  'shipping.emptyFiltered':
+    'Aucune wilaya dans cette sélection. Chaque wilaya est soit desservie, soit non desservie : l’une des deux autres filtres affichera des lignes.',
+  'shipping.emptyCli': 'Enregistrez-les avec :',
+  'loading.shipping': 'Chargement des frais de livraison',
+  'error.shipping': 'Impossible de charger les frais de livraison.',
 
   // --- landing pages --------------------------------------------------
   'pages.title': 'Pages d’atterrissage',
@@ -464,4 +503,5 @@ export const fr: Record<MessageKey, string> = {
   'resource.keys': 'clés API',
   'resource.clients': 'clients',
   'resource.pages': 'pages',
+  'resource.shipping': 'frais de livraison',
 }

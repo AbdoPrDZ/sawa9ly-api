@@ -9,7 +9,7 @@ need the dependencies installed first).
 Bump this and add a `CHANGELOG.md` entry in the same commit.
 """
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 #: The spelling packaging tools expect.
 __version__ = VERSION

@@ -22,8 +22,9 @@ match stale context.
 | Touching cart or checkout logic | `domains/checkout.md`, `workflows.md` |
 | Touching orders | `domains/orders.md`, `database.md` |
 | Touching auth, keys, or sessions | `domains/authentication.md`, `database.md` |
-| Touching products, catalogue, or clients | `domains/catalogue.md` |
+| Touching products, catalogue, delivery prices, or clients | `domains/catalogue.md` |
 | Adding a CLI group or API route | `api.md`, `conventions.md`, `architecture.md` |
+| Changing the database schema | `database.md` — **the database is live; read this before any column change** |
 | Adding or changing an MCP tool | `mcp.md`, `api.md`, `conventions.md` |
 | Adding or changing a table | `database.md`, `domains/orders.md` |
 | Changing how the site is driven | `domains/checkout.md` first — it records the site rules that are easy to break |
@@ -46,11 +47,14 @@ users, roles and API keys.
 
 - Python 3.14, `requirements.txt` is unpinned. No test suite, no linter, no CI.
 - Verification is manual against the live site.
+- **The database is live** (`database/sawa9ly.db`): never delete it to rebuild a
+  schema, and never mint or revoke a credential without being asked. See
+  `database.md`.
 - Every environment variable is declared in `src/config.py`; nothing else in the
   project reads `os.environ`.
 - **There is no default user.** Every command that acts for an account requires
   `--user`, and `Livewire` requires a username.
-- `database/sawa9ly.db` is a real, gitignored SQLite file. `create_all` builds it and
-  will not migrate it — delete it to rebuild.
+- `database/sawa9ly.db` is a real, gitignored SQLite file. `create_all` builds
+  the tables that are missing and never alters one that is not.
 - The version lives in `src/version.py` and nowhere else. `setup.py` and the
   API's advertised version both read that file.

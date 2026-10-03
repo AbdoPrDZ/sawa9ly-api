@@ -205,7 +205,7 @@ export const en = {
   'clients.col.adresse': 'Adresse',
   'clients.col.wilaya': 'Wilaya',
   'clients.col.commune': 'Commune',
-  'clients.col.note': 'Note',
+
   'clients.saved': 'Saved {name}.',
   'clients.saveFailed': 'Could not save the recipient.',
   'client.modalTitle': 'Add a delivery recipient',
@@ -216,15 +216,54 @@ export const en = {
   'client.fieldPhoneHint': 'The number the site calls to confirm the delivery.',
   'client.fieldAdresse': 'Adresse',
   'client.fieldAdresseHint': 'Street address, as the site wants it written.',
-  'client.fieldWilaya': 'Wilaya id',
+  'client.fieldWilaya': 'Wilaya',
   'client.fieldWilayaHint':
-    'The site’s numeric id for the province, not its name. Needed to reach dispatch.',
-  'client.fieldCommune': 'Commune id',
-  'client.fieldCommuneHint': 'The site’s numeric id for the commune.',
-  'client.fieldNote': 'Note',
-  'client.fieldNoteHint': 'Optional. Anything worth remembering about them.',
+    'The site’s own numbering and name. It decides which communes you can pick below.',
+  'client.fieldCommune': 'Commune',
+  'client.fieldCommuneHint':
+    'The site checks this against the wilaya at checkout, so it has to be one of the list above.',
+
+
   'client.submit': 'Save recipient',
   'client.busy': 'Saving…',
+
+  // --- delivery prices --------------------------------------------------
+  'nav.shipping': 'Shipping',
+  // --- wilayas and communes --------------------------------------------
+  'client.pickWilaya':
+    'Choose a wilaya',
+  'client.pickCommune':
+    'Choose a commune',
+  'client.pickWilayaFirst':
+    'Choose a wilaya first',
+  'loading.wilayas':
+    'Loading wilayas',
+  'loading.communes':
+    'Loading communes',
+  'error.wilayas':
+    'Could not load the wilayas.',
+  'error.communes':
+    'Could not load the communes for that wilaya.',
+
+  'shipping.title': 'Delivery prices',
+  'shipping.intro':
+    'What the site charges to deliver to each wilaya, as of the last sync. One list for everybody, so this is not yours to change — refreshing it is a command on the server.',
+  'shipping.col.wilaya': 'Wilaya',
+  'shipping.col.wilayaId': 'Id',
+  'shipping.col.available': 'Served',
+  'shipping.col.price': 'Home delivery',
+  'shipping.col.officePrice': 'Office collection',
+  'shipping.notServed': 'not served',
+  'shipping.filterLabel': 'Filter by coverage',
+  'shipping.filter.all': 'All',
+  'shipping.filter.available': 'Served',
+  'shipping.filter.unavailable': 'Not served',
+  'shipping.empty': 'No prices saved yet.',
+  'shipping.emptyFiltered':
+    'No wilaya in this slice. Every wilaya is either served or not served, so one of the other two will show rows.',
+  'shipping.emptyCli': 'Save them with:',
+  'loading.shipping': 'Loading delivery prices',
+  'error.shipping': 'Could not load the delivery prices.',
 
   // --- landing pages --------------------------------------------------
   'pages.title': 'Landing pages',
@@ -460,6 +499,7 @@ export const en = {
   'resource.keys': 'API keys',
   'resource.clients': 'clients',
   'resource.pages': 'pages',
+  'resource.shipping': 'delivery prices',
 } as const
 
 export type MessageKey = keyof typeof en

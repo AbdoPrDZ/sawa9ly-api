@@ -11,6 +11,7 @@ import { Pages } from './pages/Pages'
 import { ProductDetail } from './pages/ProductDetail'
 import { Products } from './pages/Products'
 import { ProfilePage } from './pages/Profile'
+import { Shipping } from './pages/Shipping'
 import { Users } from './pages/Users'
 import { useSession } from './session/useSession'
 
@@ -23,7 +24,8 @@ import { useSession } from './session/useSession'
  *
  * A user's own API keys are on that list deliberately: a key is their own
  * credential, and minting one should not need an administrator standing between
- * them and it.
+ * them and it. Shipping is here for the same reason the catalogue is — it is
+ * shared reference data, so it belongs to nobody and is everybody's to read.
  */
 export function App() {
   const { user, loading, signOut } = useSession()
@@ -66,6 +68,7 @@ function AppRoutes({
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/products" element={<Products />} />
         <Route path="/products/:productId" element={<ProductDetail />} />
+        <Route path="/shipping" element={<Shipping />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/orders/:orderId" element={<OrderDetail />} />
         <Route path="/clients" element={<Clients />} />

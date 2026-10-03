@@ -15,6 +15,7 @@ cookie would appear.
 
 import argparse
 import logging
+import sys
 import time
 
 from cli.account import AccountCli
@@ -28,9 +29,10 @@ from cli.page import PageCli
 from cli.product import ProductCli
 from cli.router import RouterCli
 from cli.serve import ServeCli
+from cli.shipping import ShippingCli
 from cli.telegram import TelegramCli
 from cli.track import TrackCli
-from src.models import TelegramBindingError
+from src.models import ReferenceDataMissing, TelegramBindingError
 from src.services import (
   AccountsError,
   CronError,
@@ -56,9 +58,13 @@ logger = logging.getLogger(__name__)
 # and `telegram listen` says which variable to set. TelegramBindingError is its
 # sibling: "no chat is linked" and "that code is not one we issued" are answers,
 # not faults.
+#
+# ReferenceDataMissing is a setup step for the same reason: the delivery reference
+# data is seeded rather than scraped, so an unseeded database is a missing file
+# with a known command, not a fault.
 EXPECTED_ERRORS = (
   LivewireError, OrderError, PageError, TrackingError, CronError, AccountsError,
-  TelegramError, TelegramBindingError,
+  TelegramError, TelegramBindingError, ReferenceDataMissing,
 )
 
 
@@ -68,6 +74,7 @@ class App:
   GROUPS = (
     ProductCli,
     CatalogueCli,
+    ShippingCli,
     ClientCli,
     OrderCli,
     PageCli,
@@ -122,6 +129,7 @@ class App:
     names = {
       'ProductCli': {'cart', 'login', 'product', 'checkout'},
       'CatalogueCli': {'catalogue'},
+      'ShippingCli': {'shipping'},
       'ClientCli': {'client'},
       'OrderCli': {'order'},
       'PageCli': {'page'},
@@ -147,6 +155,34 @@ class App:
     action = getattr(args, "action", None)
 
     return f"{args.command} {action}" if action else str(args.command)
+
+  @staticmethod
+  def _utf8_stdout():
+    """Let a command print Arabic and French names without dying.
+
+    A Windows console still defaults to cp1252, and `print` raises
+    `UnicodeEncodeError` rather than substituting anything — so `catalogue list`
+    died on the first Arabic product title, and any command that renders a wilaya
+    or a commune name died the same way. Reconfigured here, at the one place that
+    writes to the terminal, rather than in every command that happens to have
+    something to say.
+
+    A console that genuinely cannot render UTF-8 shows mojibake instead of
+    crashing, which is the better of the two: the data still arrives. Output
+    redirected to a file or a pipe is already UTF-8 and is left alone.
+    """
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+
+    if reconfigure is None:
+      return
+
+    try:
+      if (sys.stdout.encoding or "").lower().replace("-", "") != "utf8":
+        reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError, OSError):
+      # A stream that cannot be reconfigured — replaced, or already closed. The
+      # print below will raise whatever it would have raised anyway.
+      pass
 
   @staticmethod
   def main():
@@ -179,4 +215,5 @@ class App:
                 (time.perf_counter() - started) * 1000)
 
     if result is not None:
+      App._utf8_stdout()
       print(Output.render(result, as_json=args.json))

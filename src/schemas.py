@@ -139,16 +139,78 @@ class ProductSaveIn(BaseModel):
   """No fields; the body only exists so the POST accepts JSON."""
 
 
+class DeliveryPriceOut(BaseModel):
+  """What it costs to deliver to one wilaya, as of the last scrape.
+
+  Global rather than per-user, so nothing here identifies whose scrape it was.
+  `price` is home delivery and `office_price` is collection from the carrier's
+  office; both are null for a wilaya the site does not deliver to, which
+  `available` says outright rather than leaving to be inferred from the nulls.
+
+  `wilaya_name` is here because the shipping page prints a number and a name but
+  the scraper only reads the number, so without the key the response says `16` and
+  nothing about who that is. It is the site's own Arabic spelling.
+  """
+
+  id: int
+  wilaya_id: int
+  wilaya_name: str | None = None
+  available: bool
+  price: float | None = None
+  office_price: float | None = None
+
+
+class DeliveryPriceSyncIn(BaseModel):
+  """No fields; the body only exists so the POST accepts JSON."""
+
+
+class WilayaOut(BaseModel):
+  """One wilaya, under the site's own id.
+
+  `number` is the zero-padded form the site prints beside the name (`01`), which
+  is what a saved recipient or an order line refers to, so both are returned.
+  """
+
+  id: int
+  name: str
+  number: str | None = None
+
+
+class CommuneOut(BaseModel):
+  """One commune, under the site's own id and naming its wilaya.
+
+  `wilaya_id` is here rather than left implicit because the pairing is the thing
+  that is not derivable from the site — a client form needs it to offer the right
+  communes, and the id is what the checkout form is ultimately sent.
+  """
+
+  id: int
+  wilaya_id: int
+  name: str
+
+
 class ClientIn(BaseModel):
+  """A recipient to save.
+
+  `wilaya_id` and `commune_id` are the site's own ids, not names — the site
+  requires the numbers, and the site decides which communes belong to a wilaya.
+  """
+
   full_name: str
   phone: str | None = None
   adresse: str | None = None
   wilaya_id: int | None = None
   commune_id: int | None = None
-  note: str | None = None
 
 
 class ClientOut(BaseModel):
+  """A saved recipient.
+
+  **`note` was removed.** It was never read by anything, and a note belongs to an
+  order or one of its lines, which both still have one. This is a change to the
+  published shape: a caller reading `client.note` gets nothing rather than null.
+  """
+
   id: int
   user_id: int
   full_name: str
@@ -156,7 +218,6 @@ class ClientOut(BaseModel):
   adresse: str | None = None
   wilaya_id: int | None = None
   commune_id: int | None = None
-  note: str | None = None
 
 
 class OrderCreateIn(BaseModel):
