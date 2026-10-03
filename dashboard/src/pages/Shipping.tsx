@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { listPrices } from '../api/shipping'
+import { listPrices, syncPrices } from '../api/shipping'
 import type { DeliveryPrice, ListQuery } from '../api/types'
 import { Banner } from '../components/Banner'
 import { EmptyState } from '../components/EmptyState'
@@ -10,6 +10,7 @@ import { Pager } from '../components/Pager'
 import { MessageSpinner } from '../components/Spinner'
 import { TablePanel } from '../components/TablePanel'
 import { PAGE_SIZE, usePagedList } from '../hooks/usePagedList'
+import { apiErrorMessage } from '../i18n/apiError'
 import { useI18n } from '../i18n/useI18n'
 import { useSession } from '../session/useSession'
 
@@ -36,19 +37,24 @@ function availableOf(filter: Availability): boolean | undefined {
  * Shared reference data, like the catalogue, so every signed-in user gets it
  * rather than it being an administrator's screen.
  *
- * **Unavailable wilayas are listed, not hidden.** "We do not deliver there" is
- * the answer somebody checking coverage is looking for, so the filter narrows to
- * them rather than the default dropping them — a table of only the wilayas you
- * can ship to cannot answer "can you ship to X".
- *
- * There is no sync button here on purpose: this screen reads what has been
- * scraped and does not reach the site. Refreshing the prices is a CLI or API call,
- * so nothing in a list screen can cost a request to sawa9ly.
- */
+* **Unavailable wilayas are listed, not hidden.** "We do not deliver there" is
+  * the answer somebody checking coverage is looking for, so the filter narrows to
+  * them rather than the default dropping them — a table of only the wilayas you
+  * can ship to cannot answer "can you ship to X".
+  *
+  * **Fetch prices is the one control here that reaches sawa9ly.app**, so it is a
+  * button in the header rather than something the list does on its own: one
+  * request per press, never on a render and never per row. There is deliberately
+  * no equivalent for the wilayas or the communes — those are seeded reference
+  * data, because the site cannot be asked for them at all, so there is nothing
+  * here to fetch.
+  */
 export function Shipping() {
   const { t } = useI18n()
   const { invalidate } = useSession()
   const [filter, setFilter] = useState<Availability>('all')
+  const [syncing, setSyncing] = useState(false)
+  const [notice, setNotice] = useState('')
 
   const list = usePagedList<DeliveryPrice>(
     (query: ListQuery) => listPrices({ ...query, available: availableOf(filter) }),
@@ -64,6 +70,22 @@ export function Shipping() {
 
   const prices = list.items
 
+  async function onSync() {
+    setSyncing(true)
+    list.setError('')
+    setNotice('')
+
+    try {
+      const result = await syncPrices()
+      setNotice(t('shipping.synced', { count: result.total }))
+      list.reload()
+    } catch (caught) {
+      list.setError(apiErrorMessage(caught, t, 'error.shippingSync'))
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   function onFilter(next: Availability) {
     // Back to the first page, because the page numbers belong to the slice that
     // was showing. Narrowing to three unavailable wilayas while sitting on page 2
@@ -75,11 +97,21 @@ export function Shipping() {
 
   return (
     <section>
-      <PageHeader title={t('shipping.title')} />
+      <PageHeader title={t('shipping.title')}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={onSync}
+          disabled={syncing}
+        >
+          {syncing ? t('shipping.syncing') : t('shipping.sync')}
+        </button>
+      </PageHeader>
 
       <p className="mb-5 max-w-prose text-sm text-muted">{t('shipping.intro')}</p>
 
       {list.error ? <Banner kind="error">{list.error}</Banner> : null}
+      {notice ? <Banner kind="success">{notice}</Banner> : null}
 
       <FilterGroup
         label={t('shipping.filterLabel')}
@@ -94,7 +126,7 @@ export function Shipping() {
         <EmptyState>
           <p>{filter === 'all' ? t('shipping.empty') : t('shipping.emptyFiltered')}</p>
           <p className="mt-2">
-            {t('shipping.emptyCli')}{' '}
+            {filter === 'all' ? t('shipping.emptyFetch') : t('shipping.emptyCli')}{' '}
             <code>python main.py shipping sync --user &lt;name&gt;</code>
           </p>
         </EmptyState>

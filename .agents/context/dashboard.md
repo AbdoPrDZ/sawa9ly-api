@@ -265,11 +265,17 @@ exposed to anyone.
 
 ## Shipping
 
-`Shipping` lists what the site charges to deliver to each wilaya. It is **read-only
-and free**: it calls `GET /api/v1/shipping` and never reaches sawa9ly.app. There
-is no sync button, deliberately — refreshing the prices is
-`python main.py shipping sync` or `POST /api/v1/shipping`, so nothing on a list
-screen can cost a request to the site.
+`Shipping` lists what the site charges to deliver to each wilaya. It reads
+`GET /api/v1/shipping` for free, and carries **one control that reaches
+sawa9ly.app**: **Fetch prices**, a button in the page header that POSTs and
+reloads. It is a button rather than a per-row control so it costs one request per
+press — never on a render, never once per row. The page was read-only at first,
+which is the safer default for a screen that talks to a third party; the button
+was added once there was a reason to want it.
+
+**There is deliberately no equivalent for the wilayas or the communes.** They are
+seeded reference data, because the site cannot be asked for them at all, so a
+"fetch" button would have nothing to do.
 
 Its filter is a `FilterGroup` over served / not served, which is the question the
 table exists to answer: "can you ship to X, and for how much". **Unavailable

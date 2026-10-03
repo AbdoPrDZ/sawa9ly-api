@@ -21,3 +21,18 @@ import type { DeliveryPrice, ListQuery, PageResult } from './types'
 export function listPrices(query: ListQuery = {}) {
   return request<PageResult<DeliveryPrice>>(`/shipping${listQuery(query)}`)
 }
+
+/**
+ * Scrape the site's price list and store it.
+ *
+ * **The one call in this module that reaches sawa9ly.app**, so it is a deliberate
+ * action rather than something a list screen does for itself. It answers with the
+ * prices as they now stand, which saves the caller a second request; a re-sync
+ * updates each wilaya's row in place, so the ids come back unchanged.
+ */
+export function syncPrices() {
+  return request<PageResult<DeliveryPrice>>('/shipping', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}

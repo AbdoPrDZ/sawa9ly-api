@@ -10,16 +10,33 @@
 -- form has to be sent. `wilayas.number` is the zero-padded form the site prints
 -- ("01"), kept so a row can be matched against what is on screen.
 --
--- Load into an empty database:
---   sqlite3 database/sawa9ly.db < src/seeds/wilayas_communes.sql
+-- Load into an empty database, with whichever client you already have:
 --
--- Foreign keys are off in the sqlite3 CLI by default, which is what lets the
--- communes be inserted before anything checks them; the application turns the
--- pragma on for every connection it opens, so the next read is the first check.
+--   sqlite3 database/sawa9ly.db < src/seeds/wilayas_communes.sql
+--   psql "$DATABASE_URL" -f src/seeds/wilayas_communes.sql
+--
+-- Or against the compose stack's Postgres, where the client is already in the
+-- container and the credentials are the DB_* variables:
+--
+--   docker compose --env-file .env.docker -f docker-compose.postgres.yml \
+--     exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" \
+--     < src/seeds/wilayas_communes.sql
+--
+-- **Deliberately free of dialect-specific statements** so one file serves both
+-- engines. There is no `PRAGMA` here: SQLite's foreign-key pragma is off in its
+-- CLI anyway, so the ordering below does the work instead, and the application
+-- turns the pragma on for every connection it opens - which means the next read
+-- is the first thing that checks the result.
+--
+-- The deletes run children before parents, so the file is safe to re-run. That
+-- costs the saved delivery prices, which point at the wilayas: re-seeding the
+-- reference data means the wilayas may have changed, so the prices that were
+-- derived from them are stale by definition. One `shipping sync` puts them back.
+-- If you would rather not lose them, run this against an empty database.
 
-PRAGMA foreign_keys = OFF;
 BEGIN TRANSACTION;
 
+DELETE FROM delivery_prices;
 DELETE FROM communes;
 DELETE FROM wilayas;
 

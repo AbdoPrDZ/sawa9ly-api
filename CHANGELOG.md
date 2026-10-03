@@ -486,6 +486,37 @@ the host's loopback only.
   and following that advice would have destroyed it. The rebuild is now recorded as
   off limits, alongside the one hand-run `ALTER TABLE` that predates the rule.
 
+### Added — a Fetch prices button on the Shipping screen
+
+- `POST /api/v1/shipping` was already there for the CLI and the API; the dashboard
+  page was deliberately read-only when it was added. It now carries a **Fetch
+  prices** button in the header, which scrapes, saves, and reloads the list — one
+  request per press, never on a render and never once per row. It answers with the
+  prices as they now stand, so the page does not need a second request.
+- **There is no equivalent for the wilayas or the communes**, and there will not be
+  one: they are seeded rather than fetched, because the site cannot be asked for
+  them at all.
+
+### Fixed — the seed would only have loaded on SQLite
+
+- `src/seeds/wilayas_communes.sql` opened with `PRAGMA foreign_keys = OFF`, which
+  is SQLite-only, so on the Postgres stack the file would have failed on its first
+  line. Both engines are configured for and `DATABASE_URL` picks between them.
+  Removed — SQLite's foreign-key pragma is off in its CLI anyway, so the delete
+  ordering does that job — leaving seven statements that are plain SQL in both:
+  `BEGIN`, three `DELETE`s, two multi-row `INSERT`s, `COMMIT`. Load it with
+  `sqlite3 … <`, `psql "$DATABASE_URL" -f`, or the compose stack's in-container
+  `psql`.
+- The deletes also run children before parents now, which makes the file safe to
+  re-run. That costs the saved delivery prices, since they point at the wilayas;
+  re-seeding means the wilayas may have changed, so the prices derived from them
+  are stale by definition, and one `shipping sync` restores them. The alternative
+  was a foreign-key violation naming a constraint nobody asked for.
+- Verified against SQLite, twice into a populated database: 58 and 1541 rows both
+  times, no duplicates, `foreign_key_check` clean. **Postgres has not been run
+  against it** — there is no server here — so that half of the claim rests on the
+  grammar rather than on an execution.
+
 ## [1.3.0] - 2026-09-27
 
 ### Added

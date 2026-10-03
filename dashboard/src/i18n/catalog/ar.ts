@@ -266,6 +266,16 @@ export const ar: Record<MessageKey, string> = {
   'shipping.empty': 'لم تُحفظ أي أسعار بعد.',
   'shipping.emptyFiltered':
     'لا ولاية في هذه القائمة. كل ولاية إما مخدومة أو غير مخدومة، فالتصفية الأخرى هي التي ستعرض صفوفًا.',
+  'shipping.sync':    'جلب الأسعار',
+  'shipping.syncing':
+    'جارٍ الجلب…',
+  'shipping.synced':
+    'تم جلب {count} ولاية من سواو9لي.',
+  'shipping.emptyFetch':
+    'جلبها بالزر أعلاه، أو من سطر الأوامر:',
+  'error.shippingSync':
+    'تعذّر جلب الأسعار من سواو9لي.',
+
   'shipping.emptyCli': 'احفظها بالأمر:',
   'loading.shipping': 'جارٍ تحميل أسعار التوصيل',
   'error.shipping': 'تعذّر تحميل أسعار التوصيل.',

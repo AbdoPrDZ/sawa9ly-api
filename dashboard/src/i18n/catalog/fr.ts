@@ -263,6 +263,16 @@ export const fr: Record<MessageKey, string> = {
   'shipping.empty': 'Aucun frais enregistré pour l’instant.',
   'shipping.emptyFiltered':
     'Aucune wilaya dans cette sélection. Chaque wilaya est soit desservie, soit non desservie : l’une des deux autres filtres affichera des lignes.',
+  'shipping.sync':    'Récupérer les tarifs',
+  'shipping.syncing':
+    'Récupération…',
+  'shipping.synced':
+    '{count} wilayas récupérées depuis sawa9ly.',
+  'shipping.emptyFetch':
+    'Récupérez-les avec le bouton ci-dessus, ou en ligne de commande :',
+  'error.shippingSync':
+    'Impossible de récupérer les tarifs depuis sawa9ly.',
+
   'shipping.emptyCli': 'Enregistrez-les avec :',
   'loading.shipping': 'Chargement des frais de livraison',
   'error.shipping': 'Impossible de charger les frais de livraison.',

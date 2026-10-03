@@ -261,6 +261,16 @@ export const en = {
   'shipping.empty': 'No prices saved yet.',
   'shipping.emptyFiltered':
     'No wilaya in this slice. Every wilaya is either served or not served, so one of the other two will show rows.',
+  'shipping.sync':    'Fetch prices',
+  'shipping.syncing':
+    'Fetching…',
+  'shipping.synced':
+    'Fetched {count} wilayas from sawa9ly.',
+  'shipping.emptyFetch':
+    'Fetch them with the button above, or from the command line:',
+  'error.shippingSync':
+    'Could not fetch the prices from sawa9ly.',
+
   'shipping.emptyCli': 'Save them with:',
   'loading.shipping': 'Loading delivery prices',
   'error.shipping': 'Could not load the delivery prices.',

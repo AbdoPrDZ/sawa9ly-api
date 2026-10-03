@@ -114,6 +114,20 @@ everybody, and `DeliveryPrice` hangs off `Wilaya` rather than off a user.
   form depends on, so removing one would orphan whatever pointed at it. See
   `domains/catalogue.md` for how the commune-to-wilaya mapping is established and
   why it is not a name match.
+- **The seed is one file for both engines and carries no dialect-specific
+  statement** — seven of them, all plain SQL: `BEGIN`, three `DELETE`s in
+  dependency order, two multi-row `INSERT`s, `COMMIT`. No `PRAGMA`, which is the
+  thing that would have made it SQLite-only: SQLite's foreign-key pragma is off in
+  its CLI anyway, so the delete ordering does that job instead. The ordering is
+  children first, which is also what makes the file safe to re-run — at the cost of
+  the saved delivery prices, which point at the wilayas and are one
+  `shipping sync` away from being restored.
+  - **Both engines are configured for; a change that only works on one is a
+    defect.** `DATABASE_URL` picks. Load it with `sqlite3 … <` or
+    `psql "$DATABASE_URL" -f`, and the compose stack's Postgres already has the
+    client in the container. Postgres has not been exercised against this seed —
+    there is no server here — so the compatibility claim rests on the grammar, not
+    on a run.
 - **`Order`** — belongs to a user, optionally to a client. Deleting a client sets
   its orders' `client_id` to null rather than deleting them; an order must not
   vanish because a recipient was removed from the address book.

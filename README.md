@@ -59,15 +59,29 @@ python main.py serve
 
 The 58 wilayas and their 1541 communes are reference data the site publishes
 rather than something this client scrapes, so they are seeded once into an empty
-database:
+database. The same file serves SQLite and Postgres:
 
 ```bash
+# SQLite, the default
 sqlite3 database/sawa9ly.db < src/seeds/wilayas_communes.sql
+
+# Postgres, if DATABASE_URL points at one
+psql "$DATABASE_URL" -f src/seeds/wilayas_communes.sql
 ```
 
-The delivery prices and the recipient form both need them, and without them the
-first `shipping sync` stops and tells you to run exactly that. On Docker the
-`sqlite` service has the file mounted, so the same one-liner works inside it.
+Both delivery prices and the recipient form need them, and without them the first
+`sync` stops and tells you to run one of those.
+
+On the compose stack the client is already in the container:
+
+```bash
+docker compose --env-file .env.docker -f docker-compose.postgres.yml \
+  exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" \
+  < src/seeds/wilayas_communes.sql
+```
+
+Re-running the file is safe but clears the saved delivery prices, since they point
+at the wilayas; one `python main.py shipping sync` restores them.
 
 Or, in containers:
 
