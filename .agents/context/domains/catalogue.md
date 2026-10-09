@@ -12,6 +12,14 @@ Reference data. None of it is part of an order; all of it is input to one.
 - `images`, `figures` and `categories` are stored as JSON text. They are opaque
   lists of strings from the site and nothing queries inside them, so there is no
   case for normalising them into tables.
+- **A product has two prices, and they mean different things.** `cost` is the
+  site's own price, parsed from the display text and stored as a whole number. It
+  is read-only: every scrape overwrites it and no user may set it. `price` is the
+  sell price and belongs to the user; it defaults to `cost` the first time the
+  product is fetched and is **not** overwritten by a later scrape or tracking
+  pass, so a chosen price survives a re-fetch. `margin` is `price - cost`,
+  computed on read and never stored — a stored margin is a value that can
+  disagree with the two numbers that justify it.
 - A saved product is the only way an order can reference something, so the
   catalogue must contain the product before an order line can be built for it.
 - Order lines cascade from this table. See the hazard noted in `orders.md` before
@@ -26,7 +34,8 @@ wrong images. When a scrape changes shape, re-probe and check what was matched
 rather than loosening a selector.
 
 Prices scraped from a page are the site's defaults, which carry no commission —
-they are not usable as order prices. See `checkout.md`.
+they become the product's `cost`, not an order price. What an order sells at is
+the `price` or the price set on the line. See `checkout.md`.
 
 ## Delivery prices
 

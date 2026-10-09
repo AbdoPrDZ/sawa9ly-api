@@ -40,6 +40,8 @@ src/
     keys/                  IssueKeyModal, RevokeKeyModal, RevealKeyModal
     clients/               CreateClientModal, WilayaCommuneFields
     pages/                 CreatePageModal, EditPageModal
+    products/              EditProductPriceModal
+    store/                 StoreFields
     telegram/              TelegramCard
   pages/                   Login, Users, ApiKeys, Profile, Products,
                             ProductDetail, Shipping, Orders, OrderDetail, Clients,
@@ -229,6 +231,14 @@ sawa9ly email and password, and a **Log in to sawa9ly** button that creates or
 refreshes that account's site session. The button is disabled until the account
 has both site credentials, and the page shows whether a stored session exists.
 
+It also holds the **Store** card: the display name, the technical name (the URL
+segment) and an optional logo, in its own form that saves on its own. The two
+names are set together — a store exists only when both are — and the logo is read
+in the browser and sent as the data URI the server stores. `StoreFields` is that
+control, shared with the user modals. A super can set the same fields on another
+account from `EditUserModal`, and the `Users` table shows whether each account has
+a store. See `domains/storefront.md`.
+
 It also holds `TelegramCard`, the only place a user links a Telegram chat. The
 link is fetched from `POST /api/v1/telegram/link` and shown **once**, because the
 code in it is stored only as a hash — the same contract `RevealKeyModal` follows.
@@ -252,6 +262,13 @@ sawa9ly.
 `ProductDetail` shows one product with an image gallery, and a `WatchButton` that
 starts or stops tracking it. It handles the "not saved yet" case by offering the
 same fetch, because a 404 on a product page is otherwise a dead end.
+
+**The sell price is edited from `ProductDetail`, through `EditProductPriceModal`**
+(`PATCH /api/v1/catalogue/{id}`). The modal shows `cost` read-only — it is the
+site's price and a scrape owns it — takes the `price`, and previews the `margin`
+before saving. The list and the detail card both show cost, sell price and
+margin, all whole dinars. A re-fetch never resets a price somebody set: only the
+cost moves. See `domains/catalogue.md`.
 
 Both pages read the watch state from `/api/v1/trackers` once and match by
 `product_id`, rather than asking per row. `WatchButton` re-reads the server's

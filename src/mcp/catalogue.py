@@ -78,9 +78,30 @@ class CatalogueTools:
       return ProductRow.save(db, product_id, product.get_info()).as_dict()
 
   @staticmethod
+  def set_catalogue_price(product_id: int, price: int):
+    """Set a saved product's sell price, in whole dinars.
+
+    The cost is the site's own price and is read-only; this changes only what the
+    product is sold for. Free: it never reaches sawa9ly.app.
+    """
+    McpAuth.user()  # The catalogue is shared; this is the tool's own credential.
+
+    with session_scope() as db:
+      product = ProductRow.get(db, product_id)
+
+      if product is None:
+        raise McpError(
+          f"Product {product_id} is not saved. Call save_catalogue_product first, "
+          "to scrape and store its page."
+        )
+
+      return product.set_price(db, price).as_dict()
+
+  @staticmethod
   def tools():
     return (
       CatalogueTools.list_catalogue,
       CatalogueTools.get_catalogue_product,
       CatalogueTools.save_catalogue_product,
+      CatalogueTools.set_catalogue_price,
     )

@@ -21,3 +21,15 @@ export function getProduct(productId: number) {
 export function saveProduct(productId: number) {
   return request<CatalogueProduct>(`/catalogue/${productId}`, { method: 'POST' })
 }
+
+/**
+ * Set a saved product's sell price, in whole dinars.
+ *
+ * The cost is the site's own and is not editable; this sends `price` only.
+ */
+export function updateProductPrice(productId: number, price: number) {
+  return request<CatalogueProduct>(`/catalogue/${productId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ price }),
+  })
+}

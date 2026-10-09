@@ -54,7 +54,13 @@ class ProductOut(BaseModel):
   images: list[str]
   description: str
   figures: list[str]
-  price: str
+  # `cost` is the site's own price, read-only and refreshed on every scrape.
+  # `price` is the sell price the user sets, defaulting to `cost` on first fetch.
+  # `margin` is `price - cost`, null when either is unknown. All are whole
+  # dinars, or null — a price the site does not show is unknown, not zero.
+  cost: int | None = None
+  price: int | None = None
+  margin: int | None = None
   categories: list[str]
 
 
@@ -137,6 +143,16 @@ class ApiKeyOut(BaseModel):
 
 class ProductSaveIn(BaseModel):
   """No fields; the body only exists so the POST accepts JSON."""
+
+
+class ProductUpdateIn(BaseModel):
+  """The catalogue fields the dashboard may change.
+
+  Only the sell price. `cost` is the site's own price and is deliberately absent:
+  it is read-only here, refreshed by a scrape and never typed in by hand.
+  """
+
+  price: int = Field(ge=1, description="Sell price in whole dinars, at least 1")
 
 
 class DeliveryPriceOut(BaseModel):
@@ -346,6 +362,14 @@ class ProfileOut(BaseModel):
   has_sawa9ly_session: bool = False
   locale: str = "en"
   """Which language this user reads, and gets their notifications in."""
+  store_name: str | None = None
+  """The store's display name. Free text; not the address."""
+  store_slug: str | None = None
+  """The store's URL segment. Unique, lowercase and URL-safe."""
+  store_logo: str | None = None
+  """The store's logo as a base64 data URI, or null."""
+  has_store: bool = False
+  """True when both names are set and the store is public."""
 
 
 class ProfileIn(BaseModel):
@@ -353,12 +377,19 @@ class ProfileIn(BaseModel):
 
   Every field is optional and absent means unchanged, so the form can send only
   what was edited. `sawa9ly_password` is write-only and never returned.
+
+  The three store fields move together: a store exists only when both names are
+  set, so `store_name` and `store_slug` are required together, and an empty
+  slug clears the store. `store_logo` is an empty string to remove the logo.
   """
 
   sawa9ly_email: str | None = None
   sawa9ly_password: str | None = None
   password: str | None = Field(default=None, min_length=1)
   locale: str | None = Field(default=None, description="'en', 'fr' or 'ar'")
+  store_name: str | None = Field(default=None, max_length=255)
+  store_slug: str | None = Field(default=None, max_length=64)
+  store_logo: str | None = Field(default=None, max_length=400_000)
 
 
 class Sawa9lyLoginOut(BaseModel):
@@ -423,6 +454,10 @@ class AdminUserOut(BaseModel):
   active_api_keys: int = 0
   clients: int = 0
   orders: int = 0
+  store_name: str | None = None
+  store_slug: str | None = None
+  store_logo: str | None = None
+  has_store: bool = False
   created_at: str | None = None
 
 
@@ -436,10 +471,16 @@ class AdminUserIn(BaseModel):
 
   A `role` of `super` is rejected by the API: the dashboard can neither hand out
   nor remove that role. See `src/services/accounts.py`.
+
+  The store fields follow the same rule as the profile: the two names are set
+  together, and an empty slug clears the store.
   """
 
   role: str | None = Field(default=None, description="'admin' or 'user'")
   password: str | None = Field(default=None, min_length=1)
+  store_name: str | None = Field(default=None, max_length=255)
+  store_slug: str | None = Field(default=None, max_length=64)
+  store_logo: str | None = Field(default=None, max_length=400_000)
 
 
 class AdminUserCreateIn(AdminUserIn):

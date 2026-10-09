@@ -3,6 +3,8 @@ import type { FormEvent } from 'react'
 import type { AdminUser, Role, UserEdits } from '../../api/types'
 import { Field } from '../../components/Field'
 import { Modal } from '../../components/Modal'
+import { StoreFields } from '../store/StoreFields'
+import type { StoreValue } from '../store/StoreFields'
 import { useI18n } from '../../i18n/useI18n'
 
 /** Edits a user.
@@ -32,6 +34,11 @@ export function EditUserModal({
   // role. A user that has it returns early below, before the form is rendered.
   const [role, setRole] = useState<Role>(user.role === 'admin' ? 'admin' : 'user')
   const [password, setPassword] = useState('')
+  const [store, setStore] = useState<StoreValue>({
+    name: user.store_name ?? '',
+    slug: user.store_slug ?? '',
+    logo: user.store_logo,
+  })
   const [busy, setBusy] = useState(false)
 
   // Nothing below the role select is offered for a super: the API refuses it,
@@ -58,6 +65,9 @@ export function EditUserModal({
     const edits: UserEdits = {}
     if (role !== user.role) edits.role = role
     if (password) edits.password = password
+    if (store.name !== (user.store_name ?? '')) edits.store_name = store.name
+    if (store.slug !== (user.store_slug ?? '')) edits.store_slug = store.slug
+    if (store.logo !== user.store_logo) edits.store_logo = store.logo ?? ''
 
     try {
       await onSubmit(edits)
@@ -91,6 +101,10 @@ export function EditUserModal({
             autoComplete="new-password"
           />
         </Field>
+
+        <h4 className="mb-2 mt-4">{t('store.title')}</h4>
+        <p className="mb-3 text-xs text-muted">{t('store.optional')}</p>
+        <StoreFields value={store} onChange={setStore} />
 
         <div className="modal-actions">
           <button type="button" className="btn btn-ghost" onClick={onCancel}>

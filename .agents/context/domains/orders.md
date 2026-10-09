@@ -95,11 +95,10 @@ swallowed.
 
 ## `origin_price` is a snapshot, not a lookup
 
-`OrderLine.origin_price` is the product's own price **as it was when the line
-was created**, parsed from the catalogue's display text (`'14,500 دج'`) by
-`Product.parse_price` and stored as a number.
+`OrderLine.origin_price` is the product's own cost **as it was when the line
+was created**, taken from the catalogue's `cost` and stored as a number.
 
-It is stored rather than read through `product.price` on demand, because the site
+It is stored rather than read through `product.cost` on demand, because the site
 changes prices. Reading the product at display time would rewrite the history of
 every order that line belongs to, and the margin an order was built at would stop
 being recoverable. `as_dict` reports the stored value; do not "simplify" it into
@@ -112,9 +111,10 @@ moment, and belongs in its own order if that moment matters.
 Two cases give null rather than a number, and null means *unknown*, not zero:
 
 - the product was not in the catalogue when the line was created, so there was
-  no price to read. Scraping the product afterwards does **not** fill it in;
-- the product's display text has no number in it — "sur demande", "prix non
-  disponible" — so `parse_price` returns None.
+  no cost to read. Scraping the product afterwards does **not** fill it in;
+- the site's display text has no number in it — "sur demande", "prix non
+  disponible" — so `Product.parse_price` returns None and the catalogue's `cost`
+  is null.
 
 Lines that predate the column stay null. Backfilling from today's catalogue would
 be a guess about the past and is not done.

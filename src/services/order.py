@@ -86,10 +86,10 @@ class OrderService:
     reason it was there.
 
     `origin_price` is snapshotted **only when the line is created**, from the
-    catalogue's price for that product at this moment. A top-up deliberately
+    catalogue's cost for that product at this moment. A top-up deliberately
     leaves it alone: the line already records what the site charged the first
     time, and a later price is a different fact. A product that is not in the
-    catalogue yet has no price to snapshot and gets a null, which is also what a
+    catalogue yet has no cost to snapshot and gets a null, which is also what a
     product showing "sur demande" gets — unknown, not zero.
     """
     order = OrderService._editable(OrderService.get(db, order_id))
@@ -101,7 +101,7 @@ class OrderService:
       line = OrderLine(
         order_id=order.id, product_id=product.id,
         quantity=quantity, price=price, note=note,
-        origin_price=product.numeric_price(),
+        origin_price=product.cost,
       )
       db.add(line)
     else:

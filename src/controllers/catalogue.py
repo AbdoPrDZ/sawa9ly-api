@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.controllers.dependencies import Dependencies
-from src.schemas import Page, ProductOut, ProductSaveIn
+from src.schemas import Page, ProductOut, ProductSaveIn, ProductUpdateIn
 from src.services import Product
 from src.utils import Livewire, LivewireError, PageNotFound
 
@@ -105,3 +105,16 @@ class CatalogueController:
 
     info = CatalogueController._scrape(db, product_id)
     return ProductRow.save(db, product_id, info).as_dict()
+
+  @router.patch("/{product_id}", response_model=dict)
+  def set_price(product_id: int, body: ProductUpdateIn,
+                db=Depends(Dependencies.get_db)):
+    """Set a saved product's sell price.
+
+    The cost is the site's and is not editable here; only `price` is accepted,
+    which is why this is a PATCH and not a general product update.
+    """
+    product = CatalogueController._lookup(db, product_id)
+    product.set_price(db, body.price)
+
+    return product.as_dict()

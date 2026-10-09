@@ -40,6 +40,7 @@ this file; only a change in organisation does.
 | `domains/checkout.md` | Driving the site's two-step checkout; the commission floor; dry-run semantics. |
 | `domains/catalogue.md` | Saved product info, delivery prices and delivery clients as reference data. |
 | `domains/i18n.md` | English/French/Arabic: the per-user language, the message catalogues, one notification row per language, and RTL. |
+| `domains/storefront.md` | The public per-user store: its two names and logo, the open routes, and the unauthenticated order route. |
 
 ### What does not belong anywhere here
 

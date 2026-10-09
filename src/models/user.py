@@ -1,11 +1,18 @@
 """User entity."""
 
+import re
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, select
+from sqlalchemy import DateTime, Integer, String, Text, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db import Base, utcnow
+
+#: The technical store name's shape: lowercase letters and digits, single hyphens
+#: between them, no leading or trailing hyphen. It is a URL segment, so anything
+#: else — a space, an accent, an Arabic letter — would need encoding and would
+#: make two different names look the same in a browser.
+STORE_SLUG = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$")
 
 
 class Role:
@@ -78,6 +85,17 @@ class User(Base):
     String(16), default=Role.DEFAULT, server_default=Role.DEFAULT, index=True,
   )
   password_hash: Mapped[str | None] = mapped_column(String(255), default=None)
+  # The public storefront. There are two names on purpose: `store_name` is what
+  # the owner and their customers see, `store_slug` is the URL segment and is the
+  # only unique one. Both are required together for a store to exist, which is
+  # why a store with no products and no pages is still listed — the names are the
+  # store.
+  store_name: Mapped[str | None] = mapped_column(String(255), default=None)
+  store_slug: Mapped[str | None] = mapped_column(
+    String(64), unique=True, index=True, default=None,
+  )
+  # A base64 data URI, validated by `src.utils.store_logo`. The logo is optional.
+  store_logo: Mapped[str | None] = mapped_column(Text, default=None)
   created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
   settings: Mapped[list["Setting"]] = relationship(
@@ -231,6 +249,120 @@ class User(Base):
       .order_by(cls.username)
       .limit(1)
     ).scalar_one_or_none()
+
+  # --- the public store ------------------------------------------------
+
+  @classmethod
+  def by_store_slug(cls, db, slug):
+    """The user whose store is at this URL segment, or None."""
+    return db.execute(
+      select(cls).where(cls.store_slug == slug)
+    ).scalar_one_or_none()
+
+  @classmethod
+  def _store_filtered(cls, search=None):
+    """Every user with a store, optionally narrowed.
+
+    A store is public only when both names are set, so the filter is on both —
+    a half-filled store is not a store and must not appear in the directory.
+    """
+    from src.utils.search import Search
+
+    query = (
+      select(cls)
+      .where(cls.store_name.isnot(None), cls.store_slug.isnot(None))
+      .order_by(cls.store_name)
+    )
+
+    match = Search.match(
+      Search.like(cls.store_name, search),
+      Search.like(cls.store_slug, search),
+    )
+
+    if match is not None:
+      query = query.where(match)
+
+    return query
+
+  @classmethod
+  def stores(cls, db, limit=None, offset=None, search=None):
+    """One page of public stores, and the total before paging."""
+    from src.models.paging import Paging
+
+    return Paging.run(db, cls._store_filtered(search), limit, offset)
+
+  @staticmethod
+  def is_valid_store_slug(value):
+    """Whether a value may be used as a store's URL segment."""
+    return bool(value) and STORE_SLUG.match(value) is not None
+
+  def has_store(self):
+    """Whether this user has a public store (both names set)."""
+    return bool(self.store_name and self.store_slug)
+
+  def set_store(self, db, name, slug, logo=None):
+    """Create or update this user's store.
+
+    Both names are required together: the display name is what the store is
+    called, the slug is where it lives. `logo` is a data URI or None to clear it;
+    an absent logo is not the same as a cleared one, so a caller doing a partial
+    update passes the current value through.
+
+    Raises:
+        ValueError: If either name is missing, the slug is not URL-safe, or the
+          slug is already another store's.
+    """
+    from src.utils.store_logo import StoreLogo
+
+    name = (name or "").strip()
+    slug = (slug or "").strip().lower()
+
+    if not name:
+      raise ValueError("A store needs a display name.")
+
+    if not User.is_valid_store_slug(slug):
+      raise ValueError(
+        "The technical name may use only lowercase letters, digits and single "
+        "hyphens, and cannot start or end with a hyphen."
+      )
+
+    existing = User.by_store_slug(db, slug)
+
+    if existing is not None and existing.id != self.id:
+      raise ValueError(f"The technical name '{slug}' is already taken.")
+
+    self.store_name = name
+    self.store_slug = slug
+    self.store_logo = StoreLogo.clean(logo)
+    db.commit()
+
+    return self
+
+  def clear_store(self, db):
+    """Take this user's store down, keeping the account."""
+    self.store_name = None
+    self.store_slug = None
+    self.store_logo = None
+    db.commit()
+
+    return self
+
+  def update_store(self, db, name=None, slug=None, logo=None):
+    """Apply a partial store change. None means "unchanged".
+
+    This is the shape a PATCH wants: only the fields the caller sent move. An
+    empty name and an empty slug together remove the store, which is how a user
+    takes theirs down; anything else is set through `set_store` and validated
+    there, so a half-filled store is refused rather than stored.
+    """
+    effective_name = self.store_name if name is None else name
+    effective_slug = self.store_slug if slug is None else slug
+    effective_logo = self.store_logo if logo is None else logo
+
+    if not (effective_name or "").strip() and not (effective_slug or "").strip():
+      return self.clear_store(db)
+
+    return self.set_store(db, effective_name, effective_slug, effective_logo)
 
   # --- role and dashboard password ------------------------------------
 

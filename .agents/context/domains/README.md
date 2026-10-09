@@ -12,6 +12,7 @@ skip the rest.
 | `telegram.md` | Linking a user to a chat, and the bot that listens for it | Adding notifications, touching the bot token, or debugging an unlinked chat |
 | `notifications.md` | Recording an event and delivering it to the people who asked | Adding a notification event, or debugging a message that did not arrive |
 | `i18n.md` | The per-user language, the message catalogues, one row per language, RTL | Writing or changing any text a person reads, or adding a language |
+| `storefront.md` | The public per-user store, its routes and its unauthenticated order route | Touching the public store pages, the store fields on a user, or a public order |
 
 ## Boundaries
 
@@ -34,6 +35,10 @@ skip the rest.
   language. It decides *which words*, not what anything means; a notification's
   judgement about what is worth saying stays in `notifications.md`, and a
   controller's response shape stays in `schemas.py`.
+- **Storefront** is a presentation surface over the catalogue and orders. It
+  reads products and writes orders through `OrderService`; it owns only a user's
+  store identity (two names and a logo), and nothing downstream of it knows it
+  exists.
 
 The dependency arrow points one way: catalogue → orders → checkout. Nothing in
 checkout imports an order, which is what keeps the site's quirks isolated to one

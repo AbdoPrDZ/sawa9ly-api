@@ -22,6 +22,7 @@ from cli.account import AccountCli
 from cli.catalogue import CatalogueCli
 from cli.client import ClientCli
 from cli.cron import CronCli
+from cli.db import DbCli
 from cli.mcp import McpCli
 from cli.order import OrderCli
 from cli.output import Output
@@ -85,6 +86,7 @@ class App:
     CronCli,
     TelegramCli,
     RouterCli,
+    DbCli,
     ServeCli,
     McpCli,
   )
@@ -140,6 +142,7 @@ class App:
       'CronCli': {'cron'},
       'TelegramCli': {'telegram'},
       'RouterCli': {'router'},
+      'DbCli': {'db'},
       'ServeCli': {'serve'},
       'McpCli': {'mcp'},
     }

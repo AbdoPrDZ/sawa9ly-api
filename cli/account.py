@@ -1,5 +1,9 @@
 """CLI: users and API keys."""
 
+import base64
+import mimetypes
+import os
+
 from src.models import KeyType, Role
 
 
@@ -19,8 +23,18 @@ class AccountCli:
                      help="dashboard role (default: user)")
     add.add_argument('--login-password', default=None,
                      help="dashboard login password (not the sawa9ly password)")
+    add.add_argument('--store-name', default=None, help="store display name")
+    add.add_argument('--store-slug', default=None, help="store URL segment (lowercase, hyphens)")
+    add.add_argument('--logo-file', default=None, help="path to a store logo image")
 
     user_actions.add_parser('list', help="list users")
+
+    set_store = user_actions.add_parser('set-store', help="set or clear a user's public store")
+    set_store.add_argument('username')
+    set_store.add_argument('--name', default=None, help="store display name")
+    set_store.add_argument('--slug', default=None, help="store URL segment")
+    set_store.add_argument('--logo-file', default=None, help="path to a logo image")
+    set_store.add_argument('--clear', action='store_true', help="take the store down")
 
     set_role = user_actions.add_parser('set-role', help="change a user's role")
     set_role.add_argument('username')
@@ -126,6 +140,20 @@ class AccountCli:
         if args.login_password:
           user.set_password(db, args.login_password)
 
+        if args.store_name is not None or args.store_slug is not None:
+          AccountCli._set_store(db, user, args.store_name, args.store_slug, args.logo_file)
+
+        return AccountCli._user_row(user, db)
+
+      if args.action == 'set-store':
+        user = Cli.user(db, args.username)
+
+        if args.clear:
+          user.clear_store(db)
+          return AccountCli._user_row(user, db)
+
+        AccountCli._set_store(db, user, args.name, args.slug, args.logo_file)
+
         return AccountCli._user_row(user, db)
 
       if args.action == 'set-role':
@@ -155,6 +183,29 @@ class AccountCli:
         return {'deleted': args.username}
 
   @staticmethod
+  def _set_store(db, user, name, slug, logo_file):
+    """Apply store fields from the CLI, mapping a bad store to an error exit."""
+    logo = AccountCli._logo_data_uri(logo_file) if logo_file else None
+
+    try:
+      user.update_store(db, name, slug, logo)
+    except ValueError as error:
+      raise SystemExit(f"error: {error}")
+
+  @staticmethod
+  def _logo_data_uri(path):
+    """A logo file as the data URI the model stores."""
+    if not os.path.isfile(path):
+      raise SystemExit(f"error: no logo file at {path}")
+
+    with open(path, "rb") as handle:
+      raw = handle.read()
+
+    media_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
+
+    return f"data:{media_type};base64,{base64.b64encode(raw).decode()}"
+
+  @staticmethod
   def _user_row(user, db):
     """One user as the CLI reports it."""
     from src.models import ApiKey
@@ -165,6 +216,9 @@ class AccountCli:
       'email': user.sawa9ly_email,
       'role': user.role,
       'can_log_in': user.can_log_in(),
+      'store_name': user.store_name,
+      'store_slug': user.store_slug,
+      'has_store': user.has_store(),
       'api_keys': len(user.api_keys),
       'active_api_keys': sum(1 for key in user.api_keys if key.is_valid()),
       'clients': len(user.clients),

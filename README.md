@@ -8,8 +8,9 @@ a `POST` to `/livewire/update` carrying the component's `wire:snapshot`;
 `src/utils/livewire.py` speaks that protocol and the models on top of it read like
 ordinary objects.
 
-It comes as three things over the same code: a **command line** client, an **HTTP
-API** for your own programs, and an **admin dashboard** for the people who run it.
+It comes as four things over the same code: a **command line** client, an **HTTP
+API** for your own programs, an **admin dashboard** for the people who run it, and
+a **public storefront** each user can sell from.
 
 ## Requirements
 
@@ -89,6 +90,25 @@ Or, in containers:
 cp .env.docker.example .env.docker
 docker compose --env-file .env.docker -f docker-compose.sqlite.yml up -d --build
 ```
+
+### Upgrading an existing database
+
+`create_all` creates missing tables and never columns, so a deployment whose
+database predates a column change has to be brought forward with the schema
+steps. That command is idempotent and uses the application's own connection — the
+image ships no `psql`:
+
+```bash
+# In a container, before the new code serves traffic:
+docker compose --env-file .env.docker -f docker-compose.postgres.yml \
+  run --rm serve sawa9ly-api db migrate
+
+# Or directly, in the app's environment:
+python main.py db migrate
+```
+
+**Back the database up first.** The list of steps — and there is deliberately no
+migration framework — is in `src/services/migrations.py`.
 
 ## Documentation
 

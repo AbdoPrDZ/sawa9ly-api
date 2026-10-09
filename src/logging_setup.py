@@ -104,6 +104,19 @@ LOG_FILENAMES = {
 #: Kept as they are at INFO regardless of `LOG_LEVEL`, and why.
 ALWAYS_INFO_LOGGERS = ("uvicorn", "uvicorn.access", "uvicorn.error")
 
+#: Loggers whose name is shown as something else in the rendered line.
+#:
+#: `uvicorn.error` is uvicorn's general status logger — "error" is part of its
+#: *name*, not the level — so a normal startup line reads `INFO uvicorn.error:`,
+#: which looks like a fault and is not one. Showing it as `uvicorn` removes the
+#: false alarm.
+#:
+#: This is display only. `record.name` is left alone, so routing (`Subsystems`)
+#: and the subsystem filters still see the real name and cannot disagree.
+LOGGER_DISPLAY_NAMES = {
+  "uvicorn.error": "uvicorn",
+}
+
 #: Passed to both `uvicorn.run` calls. uvicorn installs its own handlers over the
 #: root logger unless told not to, which would leave every file empty. None is the
 #: value that means "do not configure logging yourself".
@@ -134,7 +147,7 @@ SECRET_PATTERN = re.compile(
 
 REDACTED = "[redacted]"
 
-TEXT_FORMAT = "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
+TEXT_FORMAT = "%(asctime)s %(levelname)-8s %(display_name)s: %(message)s"
 
 
 class Subsystems:
@@ -268,7 +281,7 @@ class JsonFormatter(logging.Formatter):
     payload = {
       "time": self.formatTime(record),
       "level": record.levelname,
-      "logger": record.name,
+      "logger": LOGGER_DISPLAY_NAMES.get(record.name, record.name),
       "subsystem": Subsystems.of(record.name),
       "message": record.getMessage(),
     }
@@ -279,6 +292,19 @@ class JsonFormatter(logging.Formatter):
     return json.dumps(payload, ensure_ascii=False)
 
 
+class TextFormatter(logging.Formatter):
+  """The text layout, with `%(display_name)s` resolving the logger's shown name.
+
+  `record.name` is not written to, so the display map cannot affect the routing
+  filters that read it; only what the line prints changes.
+  """
+
+  def format(self, record):
+    record.display_name = LOGGER_DISPLAY_NAMES.get(record.name, record.name)
+
+    return super().format(record)
+
+
 class Logging:
   """The handlers on the root logger, and how they were arrived at."""
 
@@ -287,7 +313,7 @@ class Logging:
     if Config.log_format() == "json":
       return JsonFormatter()
 
-    return logging.Formatter(TEXT_FORMAT)
+    return TextFormatter(TEXT_FORMAT)
 
   @classmethod
   def _file_handler(cls, path, subsystem=None):

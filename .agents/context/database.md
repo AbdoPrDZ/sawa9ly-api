@@ -51,6 +51,14 @@ default, overridable with `DATABASE_URL` for a server deployment.
   new column a `server_default` as well as its Python default for the same reason
   — it is what lets `ALTER TABLE` say something true, and what makes a row written
   by any other means read back correctly instead of as `NULL`.
+- **`python main.py db migrate` (or `sawa9ly-api db migrate` in the container)**
+  applies the hand-written column steps to an existing database, in order, and is
+  idempotent. It exists because a Postgres deployment that predates a column
+  change cannot be brought forward by `create_all`, which only creates missing
+  tables, and the image ships no `psql`. The steps live in `src/services/migrations.py`;
+  it is still a short explicit list, not a framework, and a new column change adds
+  a step there rather than a migration tool. Run it against a copy first, on
+  production last.
 - `session_scope()` is a session usable as a context manager. Controllers get one
   via `Dependencies.get_db`; CLI commands open one per command. There is no unit
   of work and no nested-transaction machinery, so keep each command or request
@@ -66,7 +74,10 @@ everybody, and `DeliveryPrice` hangs off `Wilaya` rather than off a user.
 - **`User`** — the account we act as. Holds `username`, the sawa9ly `email` and
   `password` for logging into the site, a `role` (`super`, `admin` or `user`), and
   an optional `password_hash` for the dashboard. It owns settings, API keys,
-  clients, orders and trackers; deleting a user cascades to all of them.
+  clients, orders and trackers; deleting a user cascades to all of them. It also
+  carries the public store identity — `store_name` (display), `store_slug` (the
+  unique URL segment) and `store_logo` (a base64 data URI) — where both names set
+  together are what make the store public. See `domains/storefront.md`.
 - **`Secret`** — app-wide, not per user. Holds generated secrets, currently only
   the dashboard token signing key, so a restart does not invalidate every
   session. `__repr__` deliberately omits the value: a repr in a log or a
@@ -93,7 +104,10 @@ everybody, and `DeliveryPrice` hangs off `Wilaya` rather than off a user.
 - **`Product`** — the catalogue. Global, not per user: `product_id` holds the
   sawa9ly id and is unique. Images, figures and categories are stored as JSON
   text, because they are opaque lists of strings from the site and nothing
-  queries inside them.
+  queries inside them. `cost` is the site's price (read-only, refreshed on every
+  scrape) and `price` the sell price (defaults to `cost` on first fetch, then the
+  user's); both are whole-dinar integers and `margin` is derived, not a column.
+  See `domains/catalogue.md`.
 - **`Client`** — a delivery recipient, per user. Referenced by orders, and its
   fields are what the checkout form is filled from. Its `wilaya_id` and
   `commune_id` are the site's ids, the same numbers `Wilaya.id` and

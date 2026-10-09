@@ -14,6 +14,7 @@ from src.controllers.page import PageController
 from src.controllers.products import ProductsController
 from src.controllers.public_page import PublicPageController
 from src.controllers.shipping import ShippingController
+from src.controllers.storefront import StorefrontController
 from src.controllers.telegram import TelegramController
 from src.controllers.trackers import TrackersController
 
@@ -33,6 +34,7 @@ __all__ = [
   "ProductsController",
   "PublicPageController",
   "ShippingController",
+  "StorefrontController",
   "TelegramController",
   "TrackersController",
 ]

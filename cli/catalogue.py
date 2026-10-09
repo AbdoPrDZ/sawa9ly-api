@@ -18,6 +18,10 @@ class CatalogueCli:
     show = actions.add_parser('show', help="show a saved product")
     show.add_argument('product_id')
 
+    price = actions.add_parser('set-price', help="set a product's sell price")
+    price.add_argument('product_id')
+    price.add_argument('price', type=int)
+
     actions.add_parser('list', help="list saved products")
 
   @staticmethod
@@ -40,6 +44,15 @@ class CatalogueCli:
           raise SystemExit(f"error: product {args.product_id} is not saved")
 
         return product.as_dict()
+
+    if args.action == 'set-price':
+      with Cli.db() as db:
+        product = Product.get(db, args.product_id)
+
+        if product is None:
+          raise SystemExit(f"error: product {args.product_id} is not saved")
+
+        return product.set_price(db, args.price).as_dict()
 
     if args.action == 'list':
       with Cli.db() as db:

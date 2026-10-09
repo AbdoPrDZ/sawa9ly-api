@@ -10,20 +10,20 @@ identifies the user, so each user's requests use that user's own sawa9ly session
 and cart. The dashboard instead posts a username and password to /api/auth/login
 and sends back a signed, expiring token on the /api/auth and /api/admin routes.
 
-Everything the application serves lives under /api or /dashboard; the site root
-is for the public pages, and answers a published landing page by its public id.
+Everything the application serves lives under /api or /dashboard, except the
+public storefront: the root is the store directory and `/stores/...` is a store,
+and `/pages/...` serves one published landing page by its public id.
 """
 
 import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 
 from src.config import Config
-from src import theme
 from src.controllers import (
   AdminKeysController,
   AdminOrdersController,
@@ -38,6 +38,7 @@ from src.controllers import (
   ProductsController,
   PublicPageController,
   ShippingController,
+  StorefrontController,
   TelegramController,
   TrackersController,
 )
@@ -76,13 +77,6 @@ DASHBOARD_BASE = "/dashboard"
 PROJECT_ROOT = Config.PROJECT_ROOT
 DASHBOARD_DIST = PROJECT_ROOT / "dashboard" / "dist"
 DASHBOARD_INDEX = DASHBOARD_DIST / "index.html"
-
-#: The palette, in `src/theme.py` — the sign-in page on the MCP side needs the
-#: same four values and cannot import them from here without running create_app.
-DASHBOARD_CANVAS = theme.CANVAS
-DASHBOARD_INK = theme.INK
-DASHBOARD_MUTED = theme.MUTED
-DASHBOARD_ACCENT = theme.ACCENT
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -165,7 +159,11 @@ CatalogueController,
     return {"username": user.username, "client": user.sawa9ly_email}
 
   _mount_dashboard(app)
-  _mount_root(app)
+
+  # The public storefront: the root directory, a store, and its product pages.
+  # Registered before the `/pages` namespace, which is a separate thing — the
+  # storefront links into it for a product the owner has published a page for.
+  app.include_router(StorefrontController.router)
 
   # Registered absolutely last, because it is a catch-all at the site root. The
   # API and the dashboard must be matched before it, and they are, since their
@@ -254,57 +252,6 @@ def _mount_dashboard(app):
       raise HTTPException(status_code=404, detail="Not found.")
 
     return FileResponse(DASHBOARD_INDEX)
-
-
-def _mount_root(app):
-  """The site root, which is reserved for the public pages.
-
-  It names where the dashboard is rather than serving it, because a dashboard at
-  the root is exactly what the `/api` and `/dashboard` split exists to stop. It is
-  registered whether or not the dashboard has been built, so the message is the
-  same either way.
-
-  Rendered as a page rather than raised, because the root is a URL a person types,
-  not one a client calls — same reasoning as the public page's 404. It is the one
-  place outside the public namespace that shows a human a message, and it is kept
-  in step with `NOT_FOUND_HTML`'s styling on purpose.
-  """
-
-  @app.get("/", include_in_schema=False, response_class=HTMLResponse)
-  def site_root():
-    return HTMLResponse(
-      content=f"""<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>sawa9ly</title>
-    <style>
-      body {{
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        background: {DASHBOARD_CANVAS};
-        color: {DASHBOARD_INK};
-        font: 16px/1.6 system-ui, sans-serif;
-      }}
-      main {{ text-align: center; padding: 2rem; }}
-      h1 {{ font-size: 1.4rem; margin: 0 0 0.5rem; }}
-      p {{ color: {DASHBOARD_MUTED}; margin: 0; }}
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>sawa9ly</h1>
-      <p>The dashboard is at <a style="color: {DASHBOARD_ACCENT}" href="{DASHBOARD_BASE}/">{DASHBOARD_BASE}/</a>.</p>
-    </main>
-  </body>
-</html>
-""",
-      status_code=404,
-      headers={"Content-Security-Policy": "sandbox", "X-Content-Type-Options": "nosniff"},
-    )
 
 
 app = create_app()

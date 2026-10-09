@@ -106,7 +106,9 @@ const [notice, setNotice] = useState('')
           <thead>
             <tr>
               <th>{t('users.col.username')}</th>
+              <th>{t('users.col.store')}</th>
               <th>{t('users.col.role')}</th>
+
               <th>{t('users.col.sawa9ly')}</th>
               <th>{t('users.col.telegram')}</th>
               <th>{t('users.col.keys')}</th>
@@ -124,9 +126,11 @@ const [notice, setNotice] = useState('')
                     <span className="ms-1.5 text-xs text-faint">{t('generic.you')}</span>
                   ) : null}
                 </td>
+                <td>{row.has_store ? row.store_name ?? row.store_slug : t('users.notSet')}</td>
                 <td>
                   <RoleBadge role={row.role} />
                 </td>
+
                 {/* Whether the user has set their own, not the value: it is
                     theirs, and an admin only needs to know it is done. */}
                 <td>{row.has_sawa9ly_credentials ? t('users.set') : t('users.notSet')}</td>

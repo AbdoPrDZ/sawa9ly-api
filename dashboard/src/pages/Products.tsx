@@ -14,6 +14,7 @@ import { MessageSpinner } from '../components/Spinner'
 import { TablePanel } from '../components/TablePanel'
 import { WatchButton } from '../components/WatchButton'
 import { PAGE_SIZE, usePagedList } from '../hooks/usePagedList'
+import type { Translate } from '../i18n/translations'
 import { useI18n } from '../i18n/useI18n'
 
 /** The saved catalogue, with a way to fetch a product by its id. */
@@ -100,7 +101,9 @@ export function Products() {
             <tr>
               <th>{t('products.col.id')}</th>
               <th>{t('products.col.title')}</th>
+              <th>{t('products.col.cost')}</th>
               <th>{t('products.col.price')}</th>
+              <th>{t('products.col.margin')}</th>
               <th>{t('products.col.available')}</th>
               <th>{t('products.col.images')}</th>
 <th>{t('products.col.watch')}</th>
@@ -115,7 +118,9 @@ export function Products() {
               >
                 <td className="font-mono text-xs text-muted">{product.product_id}</td>
                 <td className="max-w-xs truncate font-medium">{product.title ?? t('generic.unknown')}</td>
-                <td>{product.price ?? t('generic.unknown')}</td>
+                <td>{money(product.cost, t)}</td>
+                <td>{money(product.price, t)}</td>
+                <td>{money(product.margin, t)}</td>
                 <td>{product.available ? t('generic.yes') : t('generic.no')}</td>
                 <td className="text-muted">{product.images.length}</td>
                 <td>
@@ -149,4 +154,10 @@ onError={list.setError}
 function isNumber(value: number | undefined): value is number {
   return typeof value === 'number'
 }
+
+/** A whole number of dinars, or the shared unknown dash. */
+function money(value: number | null, t: Translate) {
+  return value === null ? t('generic.unknown') : value.toLocaleString()
+}
+
 

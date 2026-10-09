@@ -22,7 +22,12 @@ class Product(Base):
   id: Mapped[int] = mapped_column(Integer, primary_key=True)
   product_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
   title: Mapped[str | None] = mapped_column(String(512), default=None)
-  price: Mapped[str | None] = mapped_column(String(64), default=None)
+  # What the site charges, parsed from the display text. Read-only: it is the
+  # site's number, refreshed on every scrape, and never edited by a user.
+  cost: Mapped[int | None] = mapped_column(Integer, default=None)
+  # What we sell it for. Defaults to `cost` the first time the product is
+  # fetched and is the user's to change afterwards; a later scrape leaves it be.
+  price: Mapped[int | None] = mapped_column(Integer, default=None)
   description: Mapped[str | None] = mapped_column(Text, default=None)
   # Stored as JSON text so this stays portable across SQLite and Postgres.
   images: Mapped[str | None] = mapped_column(Text, default=None)
@@ -70,13 +75,21 @@ class Product(Base):
 
   @classmethod
   def save(cls, db, product_id, info):
-    """Create or update a product from a get_info() result."""
+    """Create or update a product from a get_info() result.
+
+    `cost` is overwritten on every save — it is the site's price and a scrape is
+    the only thing that knows it. `price` is the user's sell price, so it is set
+    from `cost` only when it has no value yet: a re-fetch or a tracking scan must
+    not silently undo a price somebody chose.
+    """
     import json
 
     product = cls.get_or_create(db, product_id)
 
     product.title = info.get("title")
-    product.price = info.get("price")
+    product.cost = info.get("cost")
+    if product.price is None:
+      product.price = product.cost
     product.description = info.get("description")
     product.available = bool(info.get("availability", True))
     product.images = json.dumps(info.get("images") or [], ensure_ascii=False)
@@ -85,6 +98,20 @@ class Product(Base):
     db.commit()
 
     return product
+
+  def set_price(self, db, price):
+    """Set the sell price. `cost` is deliberately not settable here."""
+    self.price = price
+    db.commit()
+
+    return self
+
+  def margin(self):
+    """Sell price minus cost, or None when either is unknown."""
+    if self.price is None or self.cost is None:
+      return None
+
+    return self.price - self.cost
 
   @classmethod
   def all(cls, db, limit=None, offset=None, search=None):
@@ -183,10 +210,6 @@ class Product(Base):
 
     return int(digits) if digits else None
 
-  def numeric_price(self):
-    """This product's price as a number, or None if the display text has none."""
-    return Product.parse_price(self.price)
-
   def as_dict(self):
     """Catalogue fields as plain values."""
     import json
@@ -194,7 +217,9 @@ class Product(Base):
     return {
       'product_id': self.product_id,
       'title': self.title,
+      'cost': self.cost,
       'price': self.price,
+      'margin': self.margin(),
       'description': self.description,
       'images': json.loads(self.images or "[]"),
       'figures': json.loads(self.figures or "[]"),

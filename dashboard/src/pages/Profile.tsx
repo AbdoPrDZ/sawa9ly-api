@@ -9,7 +9,10 @@ import { RoleBadge } from '../components/RoleBadge'
 import { MessageSpinner } from '../components/Spinner'
 import { apiErrorMessage } from '../i18n/apiError'
 import { useI18n } from '../i18n/useI18n'
+import { StoreFields } from '../features/store/StoreFields'
+import type { StoreValue } from '../features/store/StoreFields'
 import { TelegramCard } from '../features/telegram/TelegramCard'
+
 
 /** A user's own account.
  *
@@ -34,18 +37,25 @@ export function ProfilePage() {
   const [email, setEmail] = useState('')
   const [sawa9lyPassword, setSawa9lyPassword] = useState('')
   const [dashboardPassword, setDashboardPassword] = useState('')
+  const [store, setStore] = useState<StoreValue>({ name: '', slug: '', logo: null })
 
   const load = useCallback(async () => {
     try {
       const loaded = await getProfile()
       setProfile(loaded)
       setEmail(loaded.sawa9ly_email ?? '')
+      setStore({
+        name: loaded.store_name ?? '',
+        slug: loaded.store_slug ?? '',
+        logo: loaded.store_logo,
+      })
     } catch (caught) {
       setError(apiErrorMessage(caught, t, 'error.profile'))
     }
     // `t` is stable for a given locale, and the profile is loaded once per
     // language rather than once per render.
   }, [t])
+
 
   useEffect(() => {
     void load()
@@ -87,7 +97,34 @@ export function ProfilePage() {
     }
   }
 
+  async function saveStore(event: FormEvent) {
+    event.preventDefault()
+    setError('')
+    setNotice('')
+    setBusy(true)
+
+    try {
+      const updated = await updateProfile({
+        store_name: store.name,
+        store_slug: store.slug,
+        store_logo: store.logo ?? '',
+      })
+      setProfile(updated)
+      setStore({
+        name: updated.store_name ?? '',
+        slug: updated.store_slug ?? '',
+        logo: updated.store_logo,
+      })
+      setNotice(t('profile.storeSaved'))
+    } catch (caught) {
+      setError(apiErrorMessage(caught, t, 'error.profile'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function onSawa9lyLogin() {
+
     setError('')
     setNotice('')
     setLoggingIn(true)
@@ -144,8 +181,22 @@ export function ProfilePage() {
           <p className="mt-3 text-xs text-muted">{t('profile.languageHint')}</p>
         </div>
 
+        <form className="card" onSubmit={saveStore}>
+          <h3 className="mb-2">{t('profile.store')}</h3>
+          <p className="mb-3 text-sm text-muted">{t('profile.storeHint')}</p>
+
+          <StoreFields value={store} onChange={setStore} />
+
+          <div className="mt-1 flex justify-end">
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? t('profile.busy') : t('profile.saveChanges')}
+            </button>
+          </div>
+        </form>
+
         <div className="card">
           <h3 className="mb-2">{t('profile.sawa9ly')}</h3>
+
           <p className="mb-3 text-sm text-muted">
             {profile.has_sawa9ly_credentials
               ? t('profile.sawa9lyHas')

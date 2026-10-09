@@ -36,7 +36,7 @@ anywhere.
 import logging
 
 from src.i18n import Locale, Messages
-from src.models import Notification, Product
+from src.models import Notification
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +53,9 @@ TITLE_CHARS = 80
 #: change — is recorded in the diff and reported by the pass, but is not worth
 #: interrupting somebody over. Written out rather than derived, because "is this
 #: worth telling a person" is a judgement and a table would be a way of never
-#: making it.
-NOTIFIABLE_FIELDS = ("available", "price")
+#: making it. The field is `cost`, not `price`: it is the site's price that
+#: moves, and the sell price is the user's own.
+NOTIFIABLE_FIELDS = ("available", "cost")
 
 
 class Notifications:
@@ -136,16 +137,14 @@ class Notifications:
   def _line(field, product, previous, locale):
     """The headline and detail for one changed field, or None if it did not.
 
-    A field can be in the diff and still be nothing: the scan compares display
-    text, and a price printed `16.000` this minute and `16,000` the next is the
-    same price. That check happens here, where the two texts are to hand, so a
-    reformat does not become a message about a comma.
+    A field can be in the diff and still be nothing, which is why the price line
+    re-checks the two numbers before writing a message.
     """
     if field == "available":
       return Notifications._availability_line(product, previous.get("available"), locale)
 
-    if field == "price":
-      return Notifications._price_line(product, previous.get("price"), locale)
+    if field == "cost":
+      return Notifications._cost_line(product, previous.get("cost"), locale)
 
     return None
 
@@ -171,19 +170,17 @@ class Notifications:
     )
 
   @staticmethod
-  def _price_line(product, was_text, locale):
-    """The price now, and what it was.
+  def _cost_line(product, was, locale):
+    """The site's price now, and what it was.
 
-    Returns None when the two texts are the same number: the site is free to
-    change how it formats a price without the price changing, and a message about
-    a comma helps nobody.
+    Both sides are already parsed numbers, so comparing them is exact, and the
+    site reformatting `16.000` as `16,000` is no longer a change at all.
 
     `None` is a value, not a gap. A price that disappears — "sur demande" — and
     one that comes back are both events, because for somebody reselling the
     product that is precisely the news.
     """
-    was = Product.parse_price(was_text)
-    now = Product.parse_price(product.price)
+    now = product.cost
 
     if was == now:
       return None
@@ -203,11 +200,7 @@ class Notifications:
       detail = say("price.was", was=amount(was))
     elif now is not None:
       headline = say("price.set.headline", now=amount(now))
-
-      if was_text:
-        detail = say("price.set.shown_before", previous=was_text)
-      else:
-        detail = say("price.set.never_shown")
+      detail = say("price.set.never_shown")
     else:
       headline = say("price.gone.headline")
 

@@ -11,6 +11,7 @@ from .order_sync import OrderSync
 from .product import Product
 from .seed import Seed, SeedMissing
 from .shipping import Shipping
+from .storefront import Storefront, StorefrontError
 from .telegram import TelegramService
 from .tracking import Tracking, TrackingError
 
@@ -33,6 +34,8 @@ __all__ = [
   "Seed",
   "SeedMissing",
   "Shipping",
+  "Storefront",
+  "StorefrontError",
   "TelegramService",
   "Tracking",
   "TrackingError",

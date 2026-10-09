@@ -67,6 +67,10 @@ class AdminUsersController:
     if body.password:
       user.set_password(db, body.password)
 
+    AdminUsersController._apply_store(
+      db, user, body, require_super=False, admin=admin,
+    )
+
     return AdminUsersController._out(user)
 
   @router.patch("/{user_id}", response_model=AdminUserOut)
@@ -104,6 +108,8 @@ class AdminUsersController:
 
       user.set_password(db, body.password)
 
+    AdminUsersController._apply_store(db, user, body, require_super=True, admin=admin)
+
     db.commit()
 
     return AdminUsersController._out(user)
@@ -125,6 +131,32 @@ class AdminUsersController:
     return {"deleted": username}
 
   # --- shaping --------------------------------------------------------
+
+  @staticmethod
+  def _apply_store(db, user, body, require_super, admin):
+    """Set a user's store fields, when the body carried any.
+
+    Creating a user may set a store (any administrator), but changing one is
+    super-only like the rest of the edit route — it is another account's public
+    identity, not the caller's own.
+    """
+    if body.store_name is None and body.store_slug is None and body.store_logo is None:
+      return
+
+    if require_super:
+      allowed, reason = Accounts.may_edit_user(admin, user)
+
+      if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
+
+    try:
+      user.update_store(db, body.store_name, body.store_slug, body.store_logo)
+    except ValueError as error:
+      status_code = (
+        status.HTTP_409_CONFLICT if "already taken" in str(error)
+        else status.HTTP_400_BAD_REQUEST
+      )
+      raise HTTPException(status_code=status_code, detail=str(error)) from error
 
   @staticmethod
   def _user_or_404(db, user_id):
@@ -161,5 +193,9 @@ class AdminUsersController:
       "active_api_keys": sum(1 for key in user.api_keys if key.is_valid()),
       "clients": len(user.clients),
       "orders": len(user.orders),
+      "store_name": user.store_name,
+      "store_slug": user.store_slug,
+      "store_logo": user.store_logo,
+      "has_store": user.has_store(),
       "created_at": str(user.created_at) if user.created_at else None,
     }

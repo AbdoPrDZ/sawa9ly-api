@@ -114,6 +114,16 @@ class AuthController:
           status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)
         ) from error
 
+    if body.store_name is not None or body.store_slug is not None or body.store_logo is not None:
+      try:
+        current.update_store(db, body.store_name, body.store_slug, body.store_logo)
+      except ValueError as error:
+        status_code = (
+          status.HTTP_409_CONFLICT if "already taken" in str(error)
+          else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
+
     db.commit()
 
     return AuthController._profile(current, db)
@@ -195,4 +205,8 @@ class AuthController:
       "sawa9ly_email": user.sawa9ly_email,
       "has_sawa9ly_session": bool(stored),
       "locale": user.locale(db),
+      "store_name": user.store_name,
+      "store_slug": user.store_slug,
+      "store_logo": user.store_logo,
+      "has_store": user.has_store(),
     }

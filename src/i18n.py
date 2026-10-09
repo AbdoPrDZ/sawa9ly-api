@@ -181,11 +181,6 @@ CATALOGUE: dict[str, dict[str, str]] = {
     Locale.FR: "Le prix est maintenant de {now}",
     Locale.AR: "السعر الآن {now}",
   },
-  "price.set.shown_before": {
-    Locale.EN: "It previously showed as {previous}.",
-    Locale.FR: "Il affichait {previous} auparavant.",
-    Locale.AR: "كان يعرض {previous} في السابق.",
-  },
   "price.set.never_shown": {
     Locale.EN: "It previously had no price shown.",
     Locale.FR: "Aucun prix n'était affiché auparavant.",

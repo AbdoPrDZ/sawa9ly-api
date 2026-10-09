@@ -87,6 +87,14 @@ export interface AdminUser {
   active_api_keys: number
   clients: number
   orders: number
+  /** The store's display name, or null when it has none. */
+  store_name: string | null
+  /** The store's URL segment, or null. Unique across stores. */
+  store_slug: string | null
+  /** The store's logo as a base64 data URI, or null. */
+  store_logo: string | null
+  /** True when both names are set and the store is public. */
+  has_store: boolean
   created_at: string | null
 }
 
@@ -101,6 +109,10 @@ export interface Profile {
   sawa9ly_email: string | null
   has_sawa9ly_session: boolean
   locale: Locale
+  store_name: string | null
+  store_slug: string | null
+  store_logo: string | null
+  has_store: boolean
 }
 
 export interface Sawa9lyLoginResult {
@@ -140,7 +152,14 @@ export interface TelegramLink {
 export interface CatalogueProduct {
   product_id: number
   title: string | null
-  price: string | null
+  /** What the site charges, in whole dinars. Read-only and refreshed on every
+   * scrape; null when the site shows no parsable price. */
+  cost: number | null
+  /** The sell price, in whole dinars. Defaults to `cost` on first fetch and is
+   * the user's to change. Null only before the first fetch has a cost. */
+  price: number | null
+  /** `price - cost`, null when either side is unknown. Calculated by the server. */
+  margin: number | null
   description: string | null
   images: string[]
   figures: string[]
@@ -320,6 +339,12 @@ export interface UserEdits {
    *  — a user sets their own sawa9ly credentials, and an admin who could type
    *  them in could act as that user on the site. */
   password?: string
+  /** The store's display name and URL segment, set together. An empty slug clears
+   *  the store. */
+  store_name?: string
+  store_slug?: string
+  /** A base64 data URI, or an empty string to remove the logo. */
+  store_logo?: string | null
 }
 
 /** The editable part of your own account. Absent means unchanged. */
@@ -329,6 +354,12 @@ export interface ProfileIn {
   password?: string
   /** The language the dashboard and this user's notifications are written in. */
   locale?: Locale
+  /** The store's display name and URL segment, set together. An empty slug clears
+   *  the store. */
+  store_name?: string
+  store_slug?: string
+  /** A base64 data URI, or an empty string to remove the logo. */
+  store_logo?: string | null
 }
 
 export interface NewUser extends UserEdits {

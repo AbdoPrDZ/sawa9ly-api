@@ -28,9 +28,11 @@ logger = logging.getLogger(__name__)
 
 # The stored fields a scan compares. Anything not listed is not diffed, so
 # adding a column to Product does not silently start generating change records.
+# It is `cost`, not `price`: the queue watches what the site charges, and the
+# sell price is the user's own and not scraped at all.
 TRACKED_FIELDS = (
   'title',
-  'price',
+  'cost',
   'available',
   'description',
   'images',
@@ -45,7 +47,7 @@ TRACKED_FIELDS = (
 # yields None, which looks like a change on every single pass and floods the log.
 SCRAPE_KEYS = {
   'title': 'title',
-  'price': 'price',
+  'cost': 'cost',
   'available': 'availability',
   'description': 'description',
   'images': 'images',

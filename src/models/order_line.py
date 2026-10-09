@@ -18,14 +18,14 @@ class OrderLine(Base):
   different things, and a line that says why it is priced oddly is worth
   recording without overwriting the order's own note.
 
-  `origin_price` is the product's own price **as it was when the line was
-  created**, parsed from the catalogue's display text and stored as a number. It
-  is a snapshot on purpose: the site changes prices, and re-reading
-  `product.price` later would rewrite the history of every order that line is
-  part of, so the margin an order was built at stops being recoverable. Once set
-  it is never refreshed, not even when the line is topped up — a second
-  purchase of the same product is a different moment and belongs in its own line
-  if that moment matters.
+  `origin_price` is the product's own cost **as it was when the line was
+  created**, taken from the catalogue's `cost` and stored as a number. It is a
+  snapshot on purpose: the site changes prices, and re-reading `product.cost`
+  later would rewrite the history of every order that line is part of, so the
+  margin an order was built at stops being recoverable. Once set it is never
+  refreshed, not even when the line is topped up — a second purchase of the same
+  product is a different moment and belongs in its own line if that moment
+  matters.
   """
 
   __tablename__ = "order_lines"

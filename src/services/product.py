@@ -2,6 +2,7 @@
 
 from pyquery import PyQuery as pq
 
+from src.models import Product as ProductRow
 from src.utils import BASE_URL, Selector
 from src.utils.livewire import LivewireError
 
@@ -33,14 +34,20 @@ class Product(Selector):
     super().__init__(client)
 
   def get_info(self):
-    """Scrape the product page."""
+    """Scrape the product page.
+
+    The site's price is returned as `cost`, already parsed to a number: this is
+    what the product costs us, and it is the catalogue's read-only field. The
+    scraped key is deliberately not called `price` any more, because `price` now
+    means the sell price, which the site knows nothing about.
+    """
     return {
       'title': self.select('title').text(),
       'availability': self.select('availability').text().strip().lower() == AVAILABLE_LABEL,
       'images': self.select('images').map(lambda i, el: pq(el).attr('src')),
       'description': self.select('description').text(),
       'figures': self.select('figures').map(lambda i, el: pq(el).attr('src')),
-      'price': self.select('price').text(),
+      'cost': ProductRow.parse_price(self.select('price').text()),
       'categories': self.select('categories').map(lambda i, el: pq(el).text().strip()),
     }
 

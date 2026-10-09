@@ -14,6 +14,86 @@ heading when the version is bumped. `1.4.0` is the first release since `1.3.0`,
 and it carries everything committed since — the MCP server and its OAuth sign-in,
 the port check and the proxy fix — together with the delivery work below.
 
+## [1.5.0] - 2026-10-09
+
+### Added — a public store per user, with an order form
+
+- **Each user can have a public store**, served as plain HTML with no JavaScript:
+  `/` is a directory of stores, `/stores/{slug}` a store's products with a search
+  box, and `/stores/{slug}/{product_id}` a product page. A product the owner has
+  written a landing page for links to that page; otherwise the store generates a
+  default e-commerce page from the product — gallery, description, sell price. See
+  `.agents/context/domains/storefront.md`.
+- **A store is two names and a logo.** `store_name` is the display name, free
+  text and not unique; `store_slug` is the URL segment, unique, lowercase with
+  digits and hyphens. Both are required for the store to exist, and an optional
+  `store_logo` is stored as a base64 data URI (PNG/JPEG/WebP/GIF, capped at
+  256 KB). A store carries exactly the products the user has a landing page for.
+- **The default product page carries a checkout form** — name, phone, address,
+  wilaya, commune — that places a real order as the store's owner. It is the one
+  route in the project that is **open and writes**: throttled per IP and per
+  store, honeypotted, and refused unless the owner has sawa9ly credentials and the
+  product has a price. The form carries no price and no quantity — the server
+  decides both — and the order is stored locally first (a `Client` and an `Order`)
+  so it appears in the owner's dashboard, then submitted.
+- Edited from the profile page, the admin user forms, and the CLI
+  (`user add --store-name --store-slug --logo-file`, and
+  `user set-store <name> [--clear]`). `StoreFields` in the dashboard is the shared
+  control, with the logo read in the browser and sent as a data URI.
+- **`Content-Security-Policy: sandbox allow-forms`.** The store pages share an
+  origin with the dashboard, which keeps its token in `localStorage`, so each page
+  gets an opaque origin with no script; `allow-forms` is added because the checkout
+  form has to submit, and nothing else. The authored `/pages/{public_id}` keeps the
+  bare `sandbox`.
+- `python-multipart` joined `requirements.txt`: FastAPI will not build a route
+  with `Form(...)` without it, so the image could not start.
+
+### Added — a product's cost, sell price and margin
+
+- **`Product.cost`** is the site's own price, read-only and refreshed on every
+  scrape. **`price`** is now the **sell price**: a whole-dinar number, defaulted to
+  `cost` the first time a product is fetched and **not** overwritten by a later
+  scrape or tracking pass, so a chosen price survives a re-fetch. **`margin`** is
+  `price - cost`, derived on read and never stored.
+- `PATCH /api/v1/catalogue/{id}`, `catalogue set-price <id> <price>`, and the MCP
+  tool `set_catalogue_price` set the sell price; only `price` is accepted, never
+  `cost`. The dashboard lists cost, sell price and margin, and edits the price
+  through `EditProductPriceModal`.
+- **`OrderLine.origin_price` and the price-change notification now follow `cost`**,
+  since `price` no longer means what the site charges. This is a breaking change to
+  the `/api/v1/catalogue` shape: `price` is an integer or null where it was the
+  site's display text, and `cost` and `margin` are new.
+
+### Added — `db migrate`, for a database that predates a column
+
+- `python main.py db migrate` (or `sawa9ly-api db migrate` in the container)
+  applies the hand-written schema steps to an existing database, idempotently,
+  through the application's own connection — the image ships `psycopg` and no
+  `psql`. It is a short, explicit list in `src/services/migrations.py`, not a
+  framework. **A Postgres deployment built before this release must run it**:
+  `create_all` adds missing tables and never columns, so the application would
+  otherwise fail on `products.cost` and the `users.store_*` columns, and the
+  existing text prices are parsed into `cost` and the sell price on the way.
+
+### Added — the product description's figures as a gallery
+
+- `ProductDetail` shows `figures` as a second gallery beside the product images,
+  through a shared `ImageGrid` component.
+
+### Changed — `uvicorn.error` is shown as `uvicorn`
+
+- `INFO uvicorn.error:` is uvicorn's logger *name*, not the level, and it reads as
+  a fault on every normal startup line. It is displayed as `uvicorn`. `record.name`
+  is left alone, so routing and the subsystem filters are unaffected.
+
+### Security — the storefront order route
+
+- An order placed from a store is real and cannot be cancelled from here, and the
+  page is public, so anyone — or a bot — could reach it. The controls are a
+  per-IP and per-store throttle, a hidden honeypot field, and a per-owner lock
+  (the visitor orders through the owner's one shared session). It sells only what
+  the store carries, at the server's price and quantity.
+
 ## [1.4.0] - 2026-10-03
 
 ### Fixed - every redirect came back as `http://` behind a reverse proxy

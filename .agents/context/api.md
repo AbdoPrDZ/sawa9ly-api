@@ -211,6 +211,24 @@ for a non-super. The UI hides or disables controls from `can_be_managed` and
 `is_admin` rather than letting a request fail with a 403, but the server check is
 the real one.
 
+## The public storefront
+
+Not all of the HTTP surface is JSON, and not all of it is under `/api`. The
+**storefront** is mounted on the app itself, carries **no credential and no
+version prefix**, and answers HTML: `/` is the store directory, `/stores/{slug}`
+is a store, `/stores/{slug}/{product_id}` is a default product page and
+`/stores/{slug}/{product_id}/order` is an HTML form POST. They are registered
+with `include_in_schema=False`, so `python main.py router` does not list them —
+the same treatment `PublicPageController` gets, and for the same reason: they are
+for a person in a browser, not a client.
+
+**The order POST is the one route in the project that is open and writes.** There
+is no key by design; the store is the context and the order runs as the store's
+owner. It is throttled, honeypotted, and refused unless the owner can actually
+take orders. Never widen it — see `domains/storefront.md` for what it does and
+why. `store_name` (display) and `store_slug` (URL, unique) are edited through the
+profile and admin routes and the CLI, not here.
+
 ## Status codes
 
 - 400/422 for a malformed or missing body field.

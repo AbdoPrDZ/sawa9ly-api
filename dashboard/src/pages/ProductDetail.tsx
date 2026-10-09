@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { getProduct, saveProduct } from '../api/catalogue'
+import { getProduct, saveProduct, updateProductPrice } from '../api/catalogue'
 import { listTrackers } from '../api/trackers'
 import type { CatalogueProduct } from '../api/types'
 import { ApiError, isUnauthorized } from '../api/client'
 import { Banner } from '../components/Banner'
+import { ImageGrid } from '../components/ImageGrid'
 import { ImageViewer } from '../components/ImageViewer'
 import { PageHeader } from '../components/PageHeader'
 import { MessageSpinner } from '../components/Spinner'
 import { WatchButton } from '../components/WatchButton'
+import { EditProductPriceModal } from '../features/products/EditProductPriceModal'
 import { apiErrorMessage } from '../i18n/apiError'
+import type { Translate } from '../i18n/translations'
 import { useI18n } from '../i18n/useI18n'
 import { useSession } from '../session/useSession'
 
@@ -24,6 +27,7 @@ export function ProductDetail() {
   const [missing, setMissing] = useState(false)
   const [fetching, setFetching] = useState(false)
   const [viewing, setViewing] = useState<string | null>(null)
+  const [editingPrice, setEditingPrice] = useState(false)
 
   const id = Number(productId)
 
@@ -73,6 +77,15 @@ export function ProductDetail() {
     }
   }
 
+  async function onSavePrice(price: number) {
+    try {
+      setProduct(await updateProductPrice(id, price))
+      setEditingPrice(false)
+    } catch (caught) {
+      setError(apiErrorMessage(caught, t, 'product.priceFailed'))
+    }
+  }
+
   if (missing) {
     return (
       <section>
@@ -106,6 +119,9 @@ export function ProductDetail() {
   return (
     <section>
       <PageHeader title={product.title ?? `${t('products.title')} ${product.product_id}`}>
+        <button type="button" className="btn btn-ghost" onClick={() => setEditingPrice(true)}>
+          {t('product.editPrice')}
+        </button>
         <WatchButton
           productId={product.product_id}
           watching={watching}
@@ -125,7 +141,9 @@ export function ProductDetail() {
           <h3 className="mb-4">{t('product.details')}</h3>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
             <Fact label={t('product.factId')} value={String(product.product_id)} />
-            <Fact label={t('product.factPrice')} value={product.price ?? t('generic.unknown')} />
+            <Fact label={t('product.factCost')} value={money(product.cost, t)} />
+            <Fact label={t('product.factPrice')} value={money(product.price, t)} />
+            <Fact label={t('product.factMargin')} value={money(product.margin, t)} />
             <Fact
               label={t('product.factAvailable')}
               value={product.available ? t('generic.yes') : t('generic.no')}
@@ -150,26 +168,24 @@ export function ProductDetail() {
       </div>
 
       {product.images.length ? (
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-          {product.images.map((url, position) => (
-            // A button rather than a bare image, because the thumbnail is only
-            // ever a way to ask for the whole picture — the same reason a row's
-            // "Open" is a link and not a decoration.
-            <button
-              key={url}
-              type="button"
-              onClick={() => setViewing(url)}
-              aria-label={t('product.enlarge', { position: position + 1, total: product.images.length })}
-              className="group overflow-hidden rounded-lg border border-line bg-surface transition-[border-color,transform] duration-150 hover:-translate-y-0.5 hover:border-line-strong"
-            >
-              <img
-                src={url}
-                alt=""
-                loading="lazy"
-                className="aspect-square w-full object-cover transition-opacity duration-200 group-hover:opacity-80"
-              />
-            </button>
-          ))}
+        <div className="mt-4">
+          <h3 className="mb-3">{t('product.images')}</h3>
+          <ImageGrid
+            urls={product.images}
+            onSelect={setViewing}
+            label={(position, total) => t('product.enlarge', { position, total })}
+          />
+        </div>
+      ) : null}
+
+      {product.figures.length ? (
+        <div className="mt-4">
+          <h3 className="mb-3">{t('product.figures')}</h3>
+          <ImageGrid
+            urls={product.figures}
+            onSelect={setViewing}
+            label={(position, total) => t('product.enlarge', { position, total })}
+          />
         </div>
       ) : null}
 
@@ -180,8 +196,21 @@ export function ProductDetail() {
           onClose={() => setViewing(null)}
         />
       ) : null}
+
+      {editingPrice ? (
+        <EditProductPriceModal
+          product={product}
+          onCancel={() => setEditingPrice(false)}
+          onSubmit={onSavePrice}
+        />
+      ) : null}
     </section>
   )
+}
+
+/** A whole number of dinars, or the shared unknown dash. */
+function money(value: number | null, t: Translate) {
+  return value === null ? t('generic.unknown') : value.toLocaleString()
 }
 
 /** One label and its value, stacked so a two-column grid of them stays aligned. */

@@ -35,8 +35,12 @@ a change is the updated product and that timestamp, and a pass summary naming th
 fields that moved:
 
 ```json
-"changed_fields": { "5663": ["price", "available"] }
+"changed_fields": { "5663": ["cost", "available"] }
 ```
+
+The field tracked is `cost`, the site's own price — not `price`, which is the
+sell price the user sets and which a scrape never touches. See
+`domains/catalogue.md`.
 
 That was a deliberate omission, not an oversight. If a history is wanted later,
 it is a new table to ask for — not something to add on the way to the queue.
